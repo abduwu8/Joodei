@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Highcharts from 'highcharts/highmaps';
 import HighchartsReact from 'highcharts-react-official';
 // highcharts/highmaps already includes the maps module
@@ -30,6 +30,33 @@ const MarketingCompanyCountryTable = () => {
   const [mapOptions, setMapOptions] = React.useState(null);
   const [showMap, setShowMap] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Pagination calculations
+  const totalPages = Math.ceil(marketingCounts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = marketingCounts.slice(startIndex, endIndex);
+
+  // Pagination functions
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   // Aggregate counts by country and build map options
   React.useEffect(() => {
@@ -155,7 +182,7 @@ const MarketingCompanyCountryTable = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                {marketingCounts.map((row, i) => (
+                {paginatedData.map((row, i) => (
                   <tr key={i} className="hover:bg-white/60 dark:hover:bg-gray-800/40 transition-colors">
                     <td className="px-8 py-4 text-sm font-medium text-gray-900 dark:text-white">{row.trade_name}</td>
                     <td className="px-8 py-4 text-sm text-gray-800 dark:text-gray-200">{row.marketing_company}</td>
@@ -166,6 +193,82 @@ const MarketingCompanyCountryTable = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-100/80 dark:border-white/5 bg-gray-50/50 dark:bg-gray-800/30">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  Showing {startIndex + 1} to {Math.min(endIndex, marketingCounts.length)} of {marketingCounts.length} results
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  {/* Previous Button */}
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                      currentPage === 1
+                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Previous
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current page
+                      const shouldShow = 
+                        page === 1 || 
+                        page === totalPages || 
+                        (page >= currentPage - 1 && page <= currentPage + 1);
+                      
+                      if (!shouldShow) {
+                        // Show ellipsis for gaps
+                        if (page === currentPage - 2 || page === currentPage + 2) {
+                          return (
+                            <span key={page} className="px-2 py-1 text-gray-400 dark:text-gray-600">
+                              ...
+                            </span>
+                          );
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                      currentPage === totalPages
+                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         // Map view with slide-in sidebar table
@@ -202,7 +305,7 @@ const MarketingCompanyCountryTable = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                  {marketingCounts.map((row, i) => (
+                  {paginatedData.map((row, i) => (
                     <tr key={i} className="hover:bg-white/60 dark:hover:bg-gray-800/40 transition-colors">
                       <td className="px-4 py-2.5 text-[12px] font-medium text-gray-900 dark:text-white">{row.trade_name}</td>
                       <td className="px-4 py-2.5 text-[12px] text-gray-800 dark:text-gray-200">{row.marketing_company}</td>
@@ -212,6 +315,80 @@ const MarketingCompanyCountryTable = () => {
                   ))}
                 </tbody>
               </table>
+              
+              {/* Sidebar Pagination */}
+              {totalPages > 1 && (
+                <div className="px-4 py-3 border-t border-gray-200/60 dark:border-white/10 bg-gray-50/50 dark:bg-gray-800/30">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {startIndex + 1}-{Math.min(endIndex, marketingCounts.length)} of {marketingCounts.length}
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      {/* Previous Button */}
+                      <button
+                        onClick={handlePreviousPage}
+                        disabled={currentPage === 1}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                          currentPage === 1
+                            ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        ‹
+                      </button>
+
+                      {/* Page Numbers - simplified for sidebar */}
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          const shouldShow = 
+                            page === 1 || 
+                            page === totalPages || 
+                            (page >= currentPage - 1 && page <= currentPage + 1);
+                          
+                          if (!shouldShow) {
+                            if (page === currentPage - 2 || page === currentPage + 2) {
+                              return (
+                                <span key={page} className="px-1 text-gray-400 dark:text-gray-600 text-xs">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          }
+
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => handlePageChange(page)}
+                              className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                                currentPage === page
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        onClick={handleNextPage}
+                        disabled={currentPage === totalPages}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                          currentPage === totalPages
+                            ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

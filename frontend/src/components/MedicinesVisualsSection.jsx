@@ -12,6 +12,8 @@ const useThemeLike = (propIsDark) => ({ isDark: !!propIsDark });
 const PIE_BAR_COLORS = ['#8DC8D9', '#C5B39C', '#288A9A', '#2CCFB2', '#4CB8F6', '#91B3AD', '#9DB391'];
 
 const MedicinesVisualsSection = ({ isDark: isDarkProp }) => {
+  // UI: this section renders pie, bar, and stacked charts from filtered local data
+  // To integrate backend data, lift state to parent and pass datasets via props
   const { isDark } = useThemeLike(isDarkProp);
   // Dummy dataset (same shape as page version)
   const medicinesList = [
@@ -23,7 +25,7 @@ const MedicinesVisualsSection = ({ isDark: isDarkProp }) => {
     { trade_name: 'ZIVYOX 2 MG/ML SOLUTION FOR INFUSION', administrationroute: 'Intravenous use', distribute_area: 'Hospital', temperature_band: 'Cold chain (2-8°C)', authorization_status: 'valid', legal_status: 'Prescription', drugtype: 'Biological', public_price: 24100000, pharmaceuticalform: 'Solution for infusion' },
   ];
 
-  // Local filters/state
+  // UI: local filters/state
   const [selectedTemperatureBand, setSelectedTemperatureBand] = useState('All');
   const [selectedAuthorizationStatuses, setSelectedAuthorizationStatuses] = useState([]);
   const [selectedLegalStatuses, setSelectedLegalStatuses] = useState([]);
@@ -40,7 +42,7 @@ const MedicinesVisualsSection = ({ isDark: isDarkProp }) => {
     return tempOk && authOk && legalOk;
   });
 
-  // Aggregations for visuals
+  // UI: aggregations for visuals
   const groupByDrugtypeCounts = useMemo(() => Object.values(filteredMedicines.reduce((acc, row) => {
     const key = row.drugtype || 'Unknown';
     if (!acc[key]) acc[key] = { id: key, label: key, value: 0 };
@@ -84,7 +86,7 @@ const MedicinesVisualsSection = ({ isDark: isDarkProp }) => {
     return `${val}`;
   };
 
-  // Highcharts pie plugin fan animation (install once)
+  // UI: Highcharts pie plugin fan animation (install once)
   useEffect(() => {
     const pieProto = Highcharts?.seriesTypes?.pie?.prototype;
     if (!pieProto || pieProto.__fanAnimationInstalled) return;

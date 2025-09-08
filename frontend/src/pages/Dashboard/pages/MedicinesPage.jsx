@@ -4,8 +4,11 @@ import { ResponsiveContainer, ComposedChart, CartesianGrid, Tooltip, Legend, XAx
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import 'highcharts/highcharts-3d';
-import SuspendedNodes from '../../../components/SuspendedNodes';
+import 'highcharts/modules/treemap';
+import 'highcharts/modules/treegraph';
+// Removed SuspendedNodes import - replaced with Highcharts treegraph
 import MarketingCompanyCountryTable from '../../../components/MarketingCompanyCountryTable';
+import ShelfLifeTable from '../../../components/ShelfLifeTable';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsiveAreaBump } from '@nivo/bump';
 import { Box } from '@mui/material';
@@ -17,6 +20,17 @@ import { LazyMotion, domAnimation, m } from 'framer-motion';
 import DefenseRDChart from '../../../components/DefenseRDChart';
 import DistributionAreaChart from '../../../components/DistributionAreaChart';
 import MedicinesVisualsSection from '../../../components/MedicinesVisualsSection';
+// Extracted sections
+import PriceAnalysis from '../../../components/medicines/PriceAnalysis';
+import SuspendedMedicines from '../../../components/medicines/SuspendedMedicines';
+import FiltersControls from '../../../components/medicines/FiltersControls';
+import MonthlyRegistrationsChart from '../../../components/medicines/MonthlyRegistrationsChart';
+import DrugTypeDistribution from '../../../components/medicines/DrugTypeDistribution';
+import MedicinesByForm from '../../../components/medicines/MedicinesByForm';
+import AuthorizationStatusChart from '../../../components/medicines/AuthorizationStatusChart';
+import AdminRouteAreaBump from '../../../components/medicines/AdminRouteAreaBump';
+import ManufacturersRanking from '../../../components/medicines/ManufacturersRanking';
+import GlobeDistribution from '../../../components/medicines/GlobeDistribution';
 
 const cardVariants = {
   hidden: { opacity: 0, y: 8 },
@@ -175,6 +189,142 @@ const MiniTrendLineSVG = ({ color }) => {
   );
 };
 
+const SuspendedMedicinesTreegraph = ({ isDark, suspendedRows }) => {
+  // Build treegraph data from actual suspended medicines data
+  const treegraphData = useMemo(() => {
+    if (!suspendedRows || suspendedRows.length === 0) return [];
+
+    // Group by distribute_area first, then by drugtype
+    const areaGroups = suspendedRows.reduce((acc, medicine) => {
+      const area = medicine.distribute_area || 'Unknown';
+      const drugtype = medicine.drugtype || 'Unknown';
+      
+      if (!acc[area]) acc[area] = {};
+      if (!acc[area][drugtype]) acc[area][drugtype] = [];
+      acc[area][drugtype].push(medicine);
+      
+      return acc;
+    }, {});
+
+    // Build hierarchical data structure
+    const data = [
+      {
+        id: 'root',
+        parent: '',
+        name: `Suspended Medicines (${suspendedRows.length})`
+      }
+    ];
+
+    let nodeId = 1;
+    const areaIds = {};
+
+    // Add distribute_area nodes
+    Object.entries(areaGroups).forEach(([area, drugtypes]) => {
+      const areaId = `area-${nodeId++}`;
+      areaIds[area] = areaId;
+      const totalInArea = Object.values(drugtypes).flat().length;
+      
+      data.push({
+        id: areaId,
+        parent: 'root',
+        name: `${area} (${totalInArea})`
+      });
+
+      // Add drugtype nodes for this area
+      Object.entries(drugtypes).forEach(([drugtype, medicines]) => {
+        const drugtypeId = `drugtype-${nodeId++}`;
+        data.push({
+          id: drugtypeId,
+          parent: areaId,
+          name: `${drugtype} (${medicines.length})`
+        });
+      });
+    });
+
+    return data;
+  }, [suspendedRows]);
+
+  const treegraphOptions = useMemo(() => ({
+    chart: {
+      inverted: true,
+      marginBottom: 170,
+      marginLeft: 50,
+      backgroundColor: 'transparent'
+    },
+    title: {
+      text: 'Suspended Medicines Distribution',
+      align: 'left',
+      style: {
+        color: isDark ? '#ffffff' : '#111827'
+      }
+    },
+    series: [
+      {
+        type: 'treegraph',
+        data: treegraphData,
+        tooltip: {
+          pointFormat: '{point.name}',
+          backgroundColor: isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.95)',
+          borderColor: isDark ? '#1f2937' : '#e5e7eb',
+          style: {
+            color: isDark ? '#e5e7eb' : '#111827'
+          }
+        },
+        dataLabels: {
+          pointFormat: '{point.name}',
+          style: {
+            whiteSpace: 'nowrap',
+            color: isDark ? '#ffffff' : '#000000',
+            textOutline: '3px contrast'
+          },
+          crop: false
+        },
+        marker: {
+          radius: 6
+        },
+        levels: [
+          {
+            level: 1,
+            dataLabels: {
+              align: 'left',
+              x: 20
+            }
+          },
+          {
+            level: 2,
+            colorByPoint: true,
+            dataLabels: {
+              verticalAlign: 'bottom',
+              y: -20
+            }
+          },
+          {
+            level: 3,
+            colorVariation: {
+              key: 'brightness',
+              to: -0.5
+            },
+            dataLabels: {
+              verticalAlign: 'top',
+              rotation: 90,
+              y: 20
+            }
+          }
+        ]
+      }
+    ],
+    credits: { enabled: false }
+  }), [isDark, treegraphData]);
+
+  return (
+    <HighchartsReact
+      highcharts={Highcharts}
+      options={treegraphOptions}
+      containerProps={{ style: { width: '100%', height: '100%' } }}
+    />
+  );
+};
+
 const MedicinesPage = () => {
   const PALETTE = ['#8DC8D9', '#C5B39C', '#288A9A', '#2CCFB2', '#4CB8F6'];
   // Palette presets to try different contrasting looks
@@ -221,6 +371,7 @@ const MedicinesPage = () => {
   // Fetch one value from backend (FastAPI): total medicines
   const [totalMedicines, setTotalMedicines] = useState(null);
   const [statsApi, setStatsApi] = useState(null);
+  // Summary and stats (API-backed): fetches total counts and stats
   React.useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -290,6 +441,7 @@ const MedicinesPage = () => {
   // Monthly registrations from API
   const [monthlyRegistrations, setMonthlyRegistrations] = useState([]);
   const [monthlyRegistrationsLoading, setMonthlyRegistrationsLoading] = useState(true);
+  // Monthly registrations (API-backed)
   React.useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -304,6 +456,8 @@ const MedicinesPage = () => {
         if (selectedForm && selectedForm !== 'All') params.append('form', selectedForm);
         if (selectedStatus && selectedStatus !== 'All') params.append('status', selectedStatus);
         
+        // Distribution Area API key: when backend exposes key-based auth, attach key here via headers
+        // Example: headers: { 'Authorization': `Bearer ${process.env.VITE_API_KEY}` }
         const res = await fetch(`http://localhost:8000/api/monthly-registrations?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) return;
         const data = await res.json();
@@ -372,6 +526,7 @@ const MedicinesPage = () => {
 
   // Drug type distribution from API
   const [drugTypeDistribution, setDrugTypeDistribution] = useState([]);
+  // Drug type distribution (API-backed)
   React.useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -400,6 +555,7 @@ const MedicinesPage = () => {
 
   // Distribution areas from API
   const [distributeAreaDistribution, setDistributeAreaDistribution] = useState([]);
+  // Distribution areas (API-backed)
   React.useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -412,6 +568,7 @@ const MedicinesPage = () => {
         if (selectedRoute && selectedRoute !== 'All') params.append('route', selectedRoute);
         if (selectedForm && selectedForm !== 'All') params.append('form', selectedForm);
         if (selectedStatus && selectedStatus !== 'All') params.append('status', selectedStatus);
+        // Distribution Area API: add auth header here if required by backend
         const res = await fetch(`http://localhost:8000/api/distribution-areas?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) return;
         const data = await res.json();
@@ -431,6 +588,7 @@ const MedicinesPage = () => {
   // Dummy medicines data
   const [activeTab, setActiveTab] = useState('top'); // 'top' or 'bottom'
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'graph'
+  // Medicines by country (API-backed)
   React.useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -462,7 +620,7 @@ const MedicinesPage = () => {
     return () => { isMounted = false; controller.abort(); };
   }, [selectedDrugType, selectedCountry, selectedArea, selectedRoute, selectedForm, selectedStatus]);
 
-  // Filters for price analysis
+  // Price Analysis: local filters
   const [selectedDistributeAreas, setSelectedDistributeAreas] = useState([]); // ['Hospital', 'Pharmacy']
 
   // Dummy medicines list for basic table (trade_name, administrationroute, distribute_area)
@@ -677,15 +835,7 @@ const MedicinesPage = () => {
     });
   };
 
-  // Render charts when view mode or active tab changes
-  React.useEffect(() => {
-    if (viewMode === 'graph' && typeof Highcharts !== 'undefined') {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        renderChart(`chart-container-${activeTab}`, activeTab === 'top' ? topMedicines : bottomMedicines, activeTab === 'top');
-      }, 100);
-    }
-  }, [viewMode, activeTab, topMedicines, bottomMedicines]);
+  // Price Analysis chart rendering moved into PriceAnalysis component
 
   // Use API data when available, fallback to mock data
   const medicinesByCountry = medicinesByCountryApi.length > 0 ? medicinesByCountryApi : [
@@ -1133,106 +1283,44 @@ const MedicinesPage = () => {
         </LazyMotion>
 
         {/* Filters */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] border border-gray-100/50 dark:bg-white/5 dark:border-white/10">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Filters & Controls</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-            <select value={selectedDrugType} onChange={(e) => setSelectedDrugType(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {drugTypes.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {countries.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedArea} onChange={(e) => setSelectedArea(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {areas.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedRoute} onChange={(e) => setSelectedRoute(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {routes.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedForm} onChange={(e) => setSelectedForm(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {forms.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {statuses.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-            <select value={selectedShelfLife} onChange={(e) => setSelectedShelfLife(e.target.value)} className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 text-gray-900 dark:bg-white/5 dark:text-white dark:border-white/10 [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-white">
-              {shelfLives.map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-          </div>
-        </div>
+        <FiltersControls
+          selectedDrugType={selectedDrugType}
+          setSelectedDrugType={setSelectedDrugType}
+          selectedCountry={selectedCountry}
+          setSelectedCountry={setSelectedCountry}
+          selectedArea={selectedArea}
+          setSelectedArea={setSelectedArea}
+          selectedRoute={selectedRoute}
+          setSelectedRoute={setSelectedRoute}
+          selectedForm={selectedForm}
+          setSelectedForm={setSelectedForm}
+          selectedStatus={selectedStatus}
+          setSelectedStatus={setSelectedStatus}
+          selectedShelfLife={selectedShelfLife}
+          setSelectedShelfLife={setSelectedShelfLife}
+          drugTypes={drugTypes}
+          countries={countries}
+          areas={areas}
+          routes={routes}
+          forms={forms}
+          statuses={statuses}
+          shelfLives={shelfLives}
+          isDark={isDark}
+        />
 
         {/* Charts Grid - 2 per row on large screens with center divider */}
+        {/* UI: monthly registrations, drug type distribution, distribution area, medicines by form, auth status, route bump, manufacturers */}
         <div className="relative">
           <div className="pointer-events-none hidden md:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-gray-200/80 dark:bg-white/10" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Monthly Medicine Registrations</h3>
-            </div>
-            <div className="h-80" ref={monthlyRef}>
-              {hasScrolled && monthlyInView && (
-                monthlyRegistrationsLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
-                  </div>
-                ) : monthlyRegistrations.length > 0 ? (
-                  <CanvasJSChart options={canvasOptions} containerProps={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-gray-500 dark:text-gray-400">No data available</div>
-                  </div>
-                )
-              )}
-            </div>
+          <div ref={monthlyRef}>
+            <MonthlyRegistrationsChart title="Monthly Medicine Registrations" loading={monthlyRegistrationsLoading || monthlyRegistrations.length === 0} inView={monthlyInView} hasScrolled={hasScrolled} canvasOptions={canvasOptions} />
           </div>
 
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Drug Type Distribution</h3>
-            </div>
-            <div className="h-80" ref={pieDrugRef}>
-              <Box sx={{ width: '100%', height: 320 }}>
+          <div ref={pieDrugRef}>
                 {hasScrolled && pieDrugInView && (
-                <PieChart
-                  height={320}
-                  colors={PIE_BAR_COLORS}
-                  sx={{
-                    '--ChartsPie-labelTextColor': '#ffffff',
-                    '--ChartsPie-labelLineColor': isDark ? '#9ca3af' : '#6b7280',
-                  }}
-                  slotProps={{
-                    legend: {
-                      labelStyle: { fill: isDark ? '#ffffff' : '#111827' },
-                      sx: {
-                        '--ChartsLegend-labelColor': isDark ? '#ffffff' : '#111827',
-                        '& .MuiChartsLegend-label': {
-                          fill: isDark ? '#ffffff' : '#111827',
-                          color: isDark ? '#ffffff' : '#111827',
-                        },
-                      },
-                    },
-                    pieArcLabel: (params) => ({
-                      style: {
-                        fill: params.dataIndex === 0 ? '#ffffff' : '#ffffff',
-                        fontSize: '14px',
-                        fontWeight: 'bold',
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
-                      }
-                    })
-                  }}
-                  series={[{
-                    data: drugTypeDistribution.map(d => ({ id: d.type, value: d.count, label: d.type })),
-                    highlightScope: { fade: 'global', highlight: 'item' },
-                    faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-                    valueFormatter,
-                    arcLabel: (item) => `${item.value.toLocaleString()}`,
-                    arcLabelMinAngle: 35,
-                    innerRadius: 60,
-                    outerRadius: 110,
-                  }]}
-                />
-                )}
-              </Box>
-            </div>
+              <DrugTypeDistribution isDark={isDark} colors={PIE_BAR_COLORS} data={drugTypeDistribution} valueFormatter={valueFormatter} />
+            )}
           </div>
 
           <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
@@ -1243,35 +1331,17 @@ const MedicinesPage = () => {
               {hasScrolled && pieAreaInView && (
                 <div className="w-full h-full flex items-center justify-center p-4">
                   <div className="w-full h-full max-w-sm max-h-72">
-                    {/* <DistributionAreaChart compact /> */}
+                    {/* UI placeholder: Distribution Area chart - connect to /api/distribution-areas */}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Medicines by Pharmaceutical Form</h3>
-            </div>
-            <div className="h-80" ref={formRef}>
+          <div ref={formRef}>
               {hasScrolled && formInView && (
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={medicinesByForm} margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
-                  <XAxis dataKey="form" tick={{ fill: isDark ? '#e5e7eb' : '#111827' }} />
-                  <YAxis tick={{ fill: isDark ? '#e5e7eb' : '#111827' }} />
-                  <Tooltip />
-                  <Bar dataKey="count">
-                    {medicinesByForm.map((entry, index) => (
-                      <Cell key={`cell-form-${index}`} fill={PIE_BAR_COLORS[index % PIE_BAR_COLORS.length]} />
-                    ))}
-                    <LabelList dataKey="count" content={renderInsideTopLabel} />
-                  </Bar>
-                </ReBarChart>
-              </ResponsiveContainer>
-              )}
-            </div>
+              <MedicinesByForm isDark={isDark} data={medicinesByForm} colors={PIE_BAR_COLORS} renderInsideTopLabel={renderInsideTopLabel} />
+            )}
           </div>
 
           <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
@@ -1279,7 +1349,7 @@ const MedicinesPage = () => {
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Medicines by Manufacture Country</h3>
             </div>
             <div className="h-80 relative">
-              {/* <MedicineGlobe data={medicinesByCountry} autoRotate={false} autoRotateSpeed={0} /> */}
+              {/* UI: Globe (disabled rotation). Hook to backend /api/medicines-by-country */}
               <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex justify-center">
                 <div className="px-3 py-1.5 rounded-md text-xs text-gray-900 dark:text-white bg-white/80 dark:bg-gray-900/70 backdrop-blur border border-gray-200/60 dark:border-white/10 shadow-sm">
                   <span className="font-semibold">Globe</span>: {numCountries} countries • {totalMedicinesByCountry.toLocaleString()} medicines • Hover dots for details
@@ -1288,194 +1358,29 @@ const MedicinesPage = () => {
             </div>
           </div>
 
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Authorization Status Breakdown</h3>
-            </div>
-            <div className="h-80" ref={authRef}>
+          <div ref={authRef}>
               {hasScrolled && authInView && (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  width={500}
-                  height={400}
-                  data={authorizationStatusChartData}
-                  margin={{
-                    top: 20,
-                    right: 80,
-                    bottom: 20,
-                    left: 20,
-                  }}
-                >
-                  <CartesianGrid stroke={isDark ? '#374151' : '#f5f5f5'} />
-                  <Tooltip />
-                  <Legend />
-
-                  <XAxis dataKey="index" type="number" label={{ value: 'Index', position: 'insideBottomRight', offset: 0 }} />
-                  <YAxis unit="ms" type="number" label={{ value: 'Time', angle: -90, position: 'insideLeft' }} />
-                  <Scatter name="A" dataKey="red" fill={isDark ? PALETTE[3] : PALETTE[4]} />
-                  <Scatter name="B" dataKey="blue" fill={isDark ? PALETTE[0] : PALETTE[1]} />
-                  <Line dataKey="blueLine" stroke={isDark ? PALETTE[0] : PALETTE[1]} dot={false} activeDot={false} legendType="none" />
-                  <Line dataKey="redLine" stroke={isDark ? PALETTE[3] : PALETTE[4]} dot={false} activeDot={false} legendType="none" />
-                </ComposedChart>
-              </ResponsiveContainer>
-              )}
-            </div>
+              <AuthorizationStatusChart isDark={isDark} palette={PALETTE} data={authorizationStatusChartData} />
+            )}
           </div>
 
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Administration Route Distribution</h3>
-            </div>
-            <div className="h-80" ref={bumpRef}>
+          <div ref={bumpRef}>
               {hasScrolled && bumpInView && (
-              <ResponsiveAreaBump
-                data={routeTrendsData}
-                margin={{ top: 20, right: 20, bottom: 50, left: 60 }}
-                spacing={8}
-                padding={0.2}
-                colors={isDark ? PALETTE : CHART_PALETTES.deep}
-                blendMode="multiply"
-                align="center"
-                interpolation="smooth"
-                theme={{
-                  axis: {
-                    ticks: {
-                      line: {
-                        stroke: isDark ? '#ffffff' : '#111827',
-                        strokeWidth: 1
-                      },
-                      text: {
-                        fill: isDark ? '#ffffff' : '#111827',
-                        fontSize: 12
-                      }
-                    },
-                    legend: {
-                      text: {
-                        fill: isDark ? '#ffffff' : '#111827',
-                        fontSize: 12
-                      }
-                    }
-                  },
-                  tooltip: {
-                    container: {
-                      background: isDark ? '#1f2937' : '#ffffff',
-                      color: isDark ? '#ffffff' : '#111827',
-                      fontSize: 12,
-                      borderRadius: 8,
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }
-                  }
-                }}
-                axisTop={null}
-                axisBottom={{
-                  tickSize: 5,
-                  tickPadding: 5,
-                  tickRotation: 0,
-                  legend: 'Month',
-                  legendOffset: 36,
-                  legendPosition: 'middle'
-                }}
-              />
-              )}
-            </div>
+              <AdminRouteAreaBump isDark={isDark} palette={PALETTE} data={routeTrendsData} deepPalette={CHART_PALETTES.deep} />
+            )}
           </div>
 
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Top Manufacturers by Medicines</h3>
-            </div>
-            <div className="h-80" ref={manuRef}>
+          <div ref={manuRef}>
               {hasScrolled && manuInView && (
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={manufacturerRanking} layout="vertical" margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
-                  <XAxis type="number" tick={{ fill: isDark ? '#e5e7eb' : '#111827' }} />
-                  <YAxis type="category" dataKey="manufacturer" tick={{ fill: isDark ? '#e5e7eb' : '#111827' }} width={120} />
-                  <Tooltip />
-                  <Bar dataKey="medicines">
-                    {manufacturerRanking.map((entry, index) => (
-                      <Cell key={`cell-manu-${index}`} fill={PIE_BAR_COLORS[index % PIE_BAR_COLORS.length]} />
-                    ))}
-                    <LabelList dataKey="medicines" content={renderInsideRightLabel} />
-                  </Bar>
-                </ReBarChart>
-              </ResponsiveContainer>
-              )}
-            </div>
+              <ManufacturersRanking isDark={isDark} data={manufacturerRanking} colors={PIE_BAR_COLORS} renderInsideRightLabel={renderInsideRightLabel} />
+            )}
           </div>
           
           </div>
         </div>
 
         {/* Medicine Globe - Spans 2 columns with informative insights panel (outside center divider) */}
-        <div className="col-span-1 md:col-span-2">
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-6 pb-4 border-t border-gray-200 dark:border-white/10">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Global Medicine Distribution</h3>
-            </div>
-            {(() => {
-              // prepare top countries for side panel
-              const sorted = [...medicinesByCountry].sort((a, b) => b.count - a.count);
-              const top = sorted.slice(0, 5);
-              return (
-                <div className="h-[700px] relative grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-0">
-                  <div className="lg:col-span-8 overflow-hidden pr-0 lg:pr-6">
-                    {medicinesByCountryLoading ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                          <p className="text-gray-500 dark:text-gray-400">Loading global data...</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <MedicineGlobe 
-                        data={medicinesByCountry} 
-                        autoRotate={false} 
-                        autoRotateSpeed={0}
-                        globeSize={1.8}
-                      />
-                    )}
-                  </div>
-                  <div className="lg:col-span-4 lg:pl-6 lg:border-l border-gray-200 dark:border-white/10 p-0 flex flex-col gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-white/70">Active medicines right now</p>
-                      <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{totalMedicinesByCountry.toLocaleString()}</div>
-                      <p className="text-xs text-gray-500 dark:text-white/60">across {numCountries} countries</p>
-                    </div>
-                    <div className="flex-1 divide-y divide-gray-200/80 dark:divide-white/10">
-                      {top.map((c, i) => {
-                        const pct = totalMedicinesByCountry > 0 ? Math.round((c.count / totalMedicinesByCountry) * 100) : 0;
-                        const color = PIE_BAR_COLORS[i % PIE_BAR_COLORS.length];
-                        return (
-                          <div key={c.country} className="py-3">
-                            <div className="flex items-center justify-between text-sm pb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span>
-                                <span className="text-gray-900 dark:text-white font-medium">{c.country}</span>
-                              </div>
-                              <div className="text-gray-500 dark:text-white/70">{pct}%</div>
-                            </div>
-                            <div className="h-1.5 w-full rounded-full bg-gray-200/70 dark:bg-white/10 overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }}></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-white/60">
-                      Data reflects current registry counts. Hover dots on the globe for details.
-                    </div>
-                  </div>
-                  <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex justify-center lg:justify-start lg:right-auto">
-                    <div className="px-4 py-2 rounded-lg text-sm text-gray-900 dark:text-white bg-white/90 dark:bg-gray-900/80 backdrop-blur border border-gray-200/60 dark:border-white/20 shadow-lg">
-                      <span className="font-semibold">Interactive Globe</span>: Drag to rotate • Scroll to zoom • Pan to explore
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
+        <GlobeDistribution isDark={isDark} data={medicinesByCountry} loading={medicinesByCountryLoading} colors={PIE_BAR_COLORS} total={totalMedicinesByCountry} numCountries={numCountries} />
 
         {/* Distribution Area - Large section below the globe */}
         <div className="col-span-1 md:col-span-2">
@@ -1489,242 +1394,24 @@ const MedicinesPage = () => {
           </div>
         </div>
 
-        {/* Top/Bottom Medicines Table */}
-        <div className="col-span-1 md:col-span-2 mt-[60px] pt-16 md:pt-32">
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-8 pb-4">
-              <h3 className="text-xl md:text-2xl font-semibold text-gray-900 dark:text-white">Medicine Price Analysis</h3>
-            </div>
-            
-            {/* Tab Navigation */}
-            <div className="flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-800/50 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('top')}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'top'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Top 10 Medicines
-              </button>
-              <button
-                onClick={() => setActiveTab('bottom')}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'bottom'
-                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Bottom 10 Medicines
-              </button>
-            </div>
-
-            {/* Filters for Price Analysis */}
-            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">authorization_status</div>
-                <div className="flex items-center gap-4">
-                  {authorizationStatuses.map((status) => (
-                    <label key={status} className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500 dark:border-white/20 dark:bg-transparent"
-                        checked={selectedAuthorizationStatuses.includes(status)}
-                        onChange={() => createToggleHandler(setSelectedAuthorizationStatuses)(status)}
-                      />
-                      <span>{status}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">distribute_area</div>
-                <div className="flex items-center gap-4">
-                  {distributeAreasOptions.map((area) => (
-                    <label key={area} className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500 dark:border-white/20 dark:bg-transparent"
-                        checked={selectedDistributeAreas.includes(area)}
-                        onChange={() => createToggleHandler(setSelectedDistributeAreas)(area)}
-                      />
-                      <span>{area}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex justify-end mb-6">
-              <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                    viewMode === 'table'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <span>Table</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('graph')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                    viewMode === 'graph'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                    </svg>
-                    <span>Graph</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Content Container with Smooth Transitions */}
-            <div className="relative overflow-hidden">
-              {/* Table View */}
-              <div 
-                className={`transition-all duration-700 ease-in-out ${
-                  viewMode === 'table' 
-                    ? 'opacity-100 translate-y-0 scale-100' 
-                    : 'opacity-0 -translate-y-8 scale-95 pointer-events-none absolute inset-0 z-10'
-                }`}
-              >
-                <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-100/80 dark:border-white/5">
-                          <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                            #
-                          </th>
-                          <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                            Medicine
-                          </th>
-                          <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                            Origin
-                          </th>
-                          <th className="px-8 py-6 text-right text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                            Price
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                        {(activeTab === 'top' ? topMedicines : bottomMedicines).map((medicine, index) => (
-                          <tr key={index} className="group hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200">
-                            <td className="px-8 py-5 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <span className={`text-sm font-medium ${
-                                  activeTab === 'top' 
-                                    ? 'text-cyan-600 dark:text-cyan-400' 
-                                    : 'text-orange-600 dark:text-orange-400'
-                                }`}>
-                                  {index + 1}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-8 py-5">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-white tracking-tight">
-                                {medicine.trade_name}
-                              </div>
-                            </td>
-                            <td className="px-8 py-5">
-                              {(() => {
-                                const country = medicine.manufacture_country || 'Unknown';
-                                return (
-                                  <div className="flex items-center">
-                                    <span className="text-lg mr-3">
-                                      {getCountryFlag(country)}
-                                    </span>
-                                    <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                                      {country}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-8 py-5 text-right">
-                              <div className="flex items-center justify-end space-x-3">
-                                {/* Price Value */}
-                                <div className={`text-sm font-bold tracking-tight ${
-                                  activeTab === 'top' 
-                                    ? 'text-cyan-600 dark:text-cyan-400' 
-                                    : 'text-orange-600 dark:text-orange-400'
-                                }`}>
-                                  {medicine.public_price >= 1000000 
-                                    ? `$${(medicine.public_price / 1000000).toFixed(1)}M`
-                                    : `$${medicine.public_price.toFixed(2)}`
-                                  }
-                                </div>
-                                
-                                {/* Visual Bar Indicator */}
-                                <div className="flex items-center space-x-2">
-                                  <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div 
-                                      className={`h-full rounded-full transition-all duration-300 ${
-                                        activeTab === 'top' 
-                                          ? 'bg-gradient-to-r from-cyan-400 to-teal-500' 
-                                          : 'bg-gradient-to-r from-orange-400 to-red-500'
-                                      }`}
-                                      style={{ 
-                                        width: `${Math.min(100, Math.max(5, (index + 1) * 10))}%` 
-                                      }}
-                                    ></div>
-                                  </div>
-                                  <span className={`text-xs font-semibold ${
-                                    activeTab === 'top' 
-                                      ? 'text-cyan-600 dark:text-cyan-400' 
-                                      : 'text-orange-600 dark:text-orange-400'
-                                  }`}>
-                                    {activeTab === 'top' ? `+${(100 - (index + 1) * 10).toFixed(0)}%` : `-${(index + 1) * 10}%`}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* Graph View */}
-              <div 
-                className={`transition-all duration-700 ease-in-out ${
-                  viewMode === 'graph' 
-                    ? 'opacity-100 translate-y-0 scale-100' 
-                    : 'opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-0 z-20'
-                }`}
-              >
-                <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm p-8">
-                  <div className="space-y-6">
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-8">
-                      {activeTab === 'top' ? 'Top 10' : 'Bottom 10'} Medicines Price Distribution
-                    </h4>
-                    
-                    {/* Highcharts Column Chart */}
-                    <div id={`chart-container-${activeTab}`} className="w-full h-96"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-
-          </div>
-        </div>
+        {/* Price Analysis: extracted into separate component */}
+        <PriceAnalysis
+          isDark={isDark}
+          PIE_BAR_COLORS={PIE_BAR_COLORS}
+          authorizationStatuses={authorizationStatuses}
+          distributeAreasOptions={distributeAreasOptions}
+          selectedAuthorizationStatuses={selectedAuthorizationStatuses}
+          setSelectedAuthorizationStatuses={setSelectedAuthorizationStatuses}
+          selectedDistributeAreas={selectedDistributeAreas}
+          setSelectedDistributeAreas={setSelectedDistributeAreas}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          topMedicines={topMedicines}
+          bottomMedicines={bottomMedicines}
+          getCountryFlag={getCountryFlag}
+        />
 
         {/* Medicines Section (extracted) */}
         <div className="col-span-1 md:col-span-2 mt-8">
@@ -1736,111 +1423,20 @@ const MedicinesPage = () => {
           </div>
         </div>
 
-        {/* Suspended Medicines Table (dummy) */}
-        <div className="col-span-1 md:col-span-2 mt-8">
-          <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
-            <div className="flex items-center justify-between pt-8 pb-4">
-              <h3 className="text-xl md:text-2xl font-semibold text-gray-900 dark:text-white">Suspended Medicines</h3>
-            </div>
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm p-0">
-              {(() => {
-                const suspendedRows = [
-                  { authorization_status: 'suspended', trade_name: 'ANTACID JEDCO 480MG CHEWABLE TABLETS', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'JEDCOMAG EFFERVESCENT GRANULES SACHET', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'ESOMA 20 MG DELAYED RELEASE CAPSULES', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'LORDAY 10MG TABLET', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'ALLERCET 5MG F.C.TABLET', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'SARFEX 180MG F.C.TAB.(10S)', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'NEOMOL 120MG-5ML SUSPENSION', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'NEODAY 5MG-5ML SYRUP', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'NEODAY 10MG TABLETS', distribute_area: 'Pharmacy', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'IMATIS 400MG F.C.TABLET', distribute_area: 'Hospital', drugtype: 'Generic' },
-                  { authorization_status: 'suspended', trade_name: 'PRIZMA 2GM/0.25GM POWDER FOR I.V. INFUSION', distribute_area: 'Hospital', drugtype: 'Generic' },
-                ];
-
-                // Build treegraph data: root -> areas -> drugtypes
-                const areaGroups = suspendedRows.reduce((acc, r) => {
-                  if (!acc[r.distribute_area]) acc[r.distribute_area] = {};
-                  if (!acc[r.distribute_area][r.drugtype]) acc[r.distribute_area][r.drugtype] = 0;
-                  acc[r.distribute_area][r.drugtype] += 1;
-                  return acc;
-                }, {});
-
-                const treeData = [
-                  { id: 'root', parent: '', name: 'Suspended_Medicines' }
-                ];
-                Object.entries(areaGroups).forEach(([area, drugMap], idx) => {
-                  const areaId = `area-${idx}`;
-                  const areaCount = Object.values(drugMap).reduce((s, v) => s + v, 0);
-                  treeData.push({ id: areaId, parent: 'root', name: `${area}` });
-                  Object.entries(drugMap).forEach(([dt, count], j) => {
-                    treeData.push({ id: `${areaId}-${j}`, parent: areaId, name: `${dt} (${count})` });
-                  });
-                });
-
-                const nodeOptions = {
-                  chart: { inverted: true, backgroundColor: 'transparent', marginBottom: 120 },
-                  title: { text: '' },
-                  series: [{
-                    type: 'treegraph',
-                    data: treeData,
-                    tooltip: { pointFormat: '{point.name}' },
-                    dataLabels: {
-                      pointFormat: '{point.name}',
-                      style: { whiteSpace: 'nowrap', color: isDark ? '#fff' : '#111827', textOutline: 'none' },
-                      crop: false
-                    },
-                    marker: { radius: 6 },
-                    levels: [
-                      { level: 1, dataLabels: { align: 'left', x: 20 } },
-                      { level: 2, colorByPoint: true, dataLabels: { verticalAlign: 'bottom', y: -20 } },
-                      { level: 3, colorVariation: { key: 'brightness', to: -0.5 }, dataLabels: { verticalAlign: 'top', rotation: 90, y: 20 } }
-                    ]
-                  }],
-                  credits: { enabled: false }
-                };
-
-                return (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
-                    <div className="lg:col-span-7 border-r border-gray-100/60 dark:border-white/10">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-gray-100/80 dark:border-white/5">
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">authorization_status</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">trade_name</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">distribute_area</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">drugtype</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                            {suspendedRows.map((row, i) => (
-                              <tr key={i} className="hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200">
-                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.authorization_status}</td>
-                                <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{row.trade_name}</td>
-                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.distribute_area}</td>
-                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{row.drugtype}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="lg:col-span-5 p-4">
-                      <div style={{ width: '100%', height: 700 }}>
-                        <SuspendedNodes rows={suspendedRows} isDark={isDark} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
+        {/* Suspended Medicines: extracted into separate component */}
+        <SuspendedMedicines isDark={isDark} />
 
         {/* Marketing Company x Country Table */}
         <div className="col-span-1 md:col-span-2 mt-8">
           <MarketingCompanyCountryTable />
+        </div>
+
+        {/* Shelf Life Analysis Table */}
+        <div className="col-span-1 md:col-span-2 mt-8">
+          <div className="flex items-center justify-between pt-8 pb-4">
+            <h3 className="text-xl md:text-2xl font-semibold text-gray-900 dark:text-white">Shelf Life Analysis</h3>
+          </div>
+          <ShelfLifeTable isDark={isDark} />
         </div>
       </div>
     </div>

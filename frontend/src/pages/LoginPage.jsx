@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
 import Aurora from '../components/aurora';
 import Loader from '../components/Loader';
+import LoadingScreen from '../components/LoadingScreen';
 import dashboardImage from '../images/Dashboardexample-modified.png';
 
 const LoginPage = () => {
@@ -11,6 +12,7 @@ const LoginPage = () => {
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [showLoadingScreen, setShowLoadingScreen] = useState(false);
     const navigate = useNavigate();
     const { theme } = useTheme();
     const isDark = theme === 'dark';
@@ -20,18 +22,30 @@ const LoginPage = () => {
         // Simple validation - accept any email for now
         if (email.trim()) {
             setIsLoading(true);
-            // Simulate API call delay
+            // Show loading screen for 4 seconds
             setTimeout(() => {
                 setIsLoading(false);
-                navigate('/dashboard');
-            }, 2000);
+                setShowLoadingScreen(true);
+                // Navigate to dashboard after 4 seconds
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 4000);
+            }, 500); // Small delay to show button loading state
         }
     };
 
     const handleGoogleSignIn = () => {
-        // Mock Google sign in - redirect to dashboard
-        navigate('/dashboard');
+        // Mock Google sign in - show loading screen for 4 seconds
+        setShowLoadingScreen(true);
+        setTimeout(() => {
+            navigate('/dashboard');
+        }, 4000);
     };
+
+    // Show loading screen if user has signed in
+    if (showLoadingScreen) {
+        return <LoadingScreen />;
+    }
 
     return (
         <div className={`h-screen overflow-hidden relative ${isDark ? 'bg-[#020617]' : 'bg-white'}`}>
