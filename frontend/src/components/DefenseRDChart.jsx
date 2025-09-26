@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const DefenseRDChart = ({ compact = false }) => {
+const DefenseRDChart = ({ compact = false, data: externalData, title, isDark = false, colors }) => {
   const [animationProgress, setAnimationProgress] = useState(0);
   const [hoveredSegment, setHoveredSegment] = useState(null);
   
@@ -20,16 +20,29 @@ const DefenseRDChart = ({ compact = false }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const data = [
-    { category: "Mission Support", value: 52, color: "#17312e" },
-    { category: "Space Based Systems", value: 21, color: "#1b3a36" },
-    { category: "Aviation", value: 19, color: "#20443f" },
-    { category: "Science, Technicians, and Others", value: 18, color: "#254e48" },
-    { category: "Missile Defence", value: 11, color: "#2a5851" },
-    { category: "Communications, Intelligence", value: 11, color: "#2e625a" },
-    { category: "Naval Systems", value: 6, color: "#336c63" },
-    { category: "Ground Systems", value: 3, color: "#37766c" }
+  const defaultPalette = colors && colors.length ? colors : [
+    "#06b6d4", "#14b8a6", "#22c55e", "#84cc16", "#eab308",
+    "#f59e0b", "#f97316", "#ef4444", "#a855f7", "#3b82f6"
   ];
+  const fallbackData = [
+    { category: "Mission Support", value: 52 },
+    { category: "Space Based Systems", value: 21 },
+    { category: "Aviation", value: 19 },
+    { category: "Science, Technicians, and Others", value: 18 },
+    { category: "Missile Defence", value: 11 },
+    { category: "Communications, Intelligence", value: 11 },
+    { category: "Naval Systems", value: 6 },
+    { category: "Ground Systems", value: 3 }
+  ];
+  const sortedSource = (externalData && externalData.length ? externalData : fallbackData)
+    .slice()
+    .sort((a, b) => (Number(b.value ?? b.count ?? 0) - Number(a.value ?? a.count ?? 0)));
+  const topTen = sortedSource.slice(0, 10);
+  const data = topTen.map((item, idx) => ({
+    category: item.category ?? item.label ?? String(item.name ?? `Item ${idx+1}`),
+    value: Number(item.value ?? item.count ?? 0),
+    color: item.color || defaultPalette[idx % defaultPalette.length]
+  }));
 
   // Calculate angles based on values
   const total = data.reduce((sum, item) => sum + item.value, 0);
@@ -38,9 +51,9 @@ const DefenseRDChart = ({ compact = false }) => {
     angle: (item.value / total) * 360
   }));
 
-  const radius = compact ? 180 : 200;
-  const innerRadius = compact ? 124 : 138;
-  const svgSize = compact ? 480 : 500;
+  const radius = compact ? 180 : 210;
+  const innerRadius = compact ? 124 : 140;
+  const svgSize = compact ? 500 : 560;
   // Box that always fits inside the circle: inscribed square side = r * sqrt(2)
   const centerBox = Math.floor((innerRadius - 10) * Math.SQRT1_2 * 2);
 
@@ -71,42 +84,20 @@ const DefenseRDChart = ({ compact = false }) => {
   };
 
   return (
-    <div className={compact ? "w-full h-full flex items-center justify-center p-2" : "w-full h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center p-8 relative overflow-hidden"}>
-      {!compact && (
-        <div className="absolute inset-0">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl"></div>
-        </div>
-      )}
-      
-      <div className="relative max-w-7xl w-full">
+    <div className={compact ? "w-full h-full flex items-center justify-center p-2" : "w-full bg-transparent flex items-start justify-center p-2 md:p-4"}>
+      <div className="relative w-full max-w-7xl">
         {!compact && (
-          <div className="mb-8 text-cyan-400">
-            <h1 className="text-5xl font-bold tracking-wider mb-2" style={{ fontFamily: 'monospace' }}>
-              INVESTMENT
-            </h1>
-            <h2 className="text-2xl font-light tracking-wide">
-              DOD AND EDF R&D ALLOCATIONS
+          <div className="mb-4 md:mb-6">
+            <h2 className="text-lg md:text-2xl font-semibold tracking-wide text-cyan-500">
+              {title || 'Distribution Overview'}
             </h2>
-            <h3 className="text-xl font-light">
-              BY CATEGORY AS <span className="text-cyan-300">BILLIONS</span>,
-            </h3>
-            <p className="text-lg text-gray-400 mt-1">$US BILLIONS, 2024</p>
           </div>
         )}
 
-        <div className={compact ? "flex items-center justify-center" : "flex items-center justify-between"}>
-          {!compact && (
-            <div className="max-w-md">
-              <p className="text-gray-300 text-base leading-relaxed mb-4">
-                In 2024, the U.S. Department of Defense (DoD) and European Defence Fund (EDF) spent{' '}
-                <span className="text-cyan-400">nearly $146 billion</span> researching new defense technologies.
-              </p>
-            </div>
-          )}
-
-          <div className="relative flex items-center justify-center">
-            <svg width={svgSize} height={svgSize} viewBox={`-250 -250 500 500`} className="transform">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start">
+          {/* Left: Donut/Pie */}
+          <div className="w-full flex items-center justify-center">
+            <svg width={svgSize} height={svgSize} viewBox={`-280 -280 560 560`} className="transform">
               <defs>
                 <filter id="shadow">
                   <feDropShadow dx="0" dy="0" stdDeviation="4" floodOpacity="0.3"/>
@@ -121,22 +112,18 @@ const DefenseRDChart = ({ compact = false }) => {
                     const endAngle = currentAngle + item.angle;
                     currentAngle = endAngle;
                     
-                    const isHovered = hoveredSegment === index;
+                    const isHovered = false;
                     
                     return (
                       <g key={index}>
                         <path
                           d={createPath(startAngle, endAngle, radius, innerRadius, animationProgress)}
                           fill={item.color}
-                          stroke="#0f1419"
+                          stroke={isDark ? "#0b1220" : "#ffffff"}
+                          strokeOpacity="0.6"
                           strokeWidth="1"
-                          className="transition-all duration-300 cursor-pointer"
-                          style={{
-                            filter: isHovered ? 'brightness(1.3)' : 'brightness(1)',
-                            opacity: animationProgress
-                          }}
-                          onMouseEnter={() => setHoveredSegment(index)}
-                          onMouseLeave={() => setHoveredSegment(null)}
+                          className="transition-all duration-200"
+                          style={{ opacity: animationProgress }}
                         />
                       </g>
                     );
@@ -149,10 +136,18 @@ const DefenseRDChart = ({ compact = false }) => {
                 cx="0" 
                 cy="0" 
                 r={innerRadius - 5} 
-                fill="#0f1419"
+                fill={isDark ? '#0b1220' : '#ffffff'}
                 stroke="none"
                 opacity={animationProgress}
               />
+              <g style={{ opacity: animationProgress }}>
+                <text x="0" y="-6" textAnchor="middle" className={isDark ? 'fill-white' : 'fill-gray-900'} fontSize={compact ? "18" : "22"} fontWeight="800">
+                  {total.toLocaleString()}
+                </text>
+                <text x="0" y="14" textAnchor="middle" className={isDark ? 'fill-white' : 'fill-gray-600'} fontSize={compact ? "9" : "10"}>
+                  Total
+                </text>
+              </g>
               
               {/* Text labels positioned on segments */}
               {(() => {
@@ -164,7 +159,7 @@ const DefenseRDChart = ({ compact = false }) => {
                   // Different positioning based on segment size and location
                   let textRadius, fontSize, categoryFontSize;
                   
-                  if (item.angle > 60) { // Large segments like Mission Support
+                  if (item.angle > 60) { // Large segments
                     textRadius = (innerRadius + radius) / 2;
                     fontSize = "24";
                     categoryFontSize = "10";
@@ -173,7 +168,7 @@ const DefenseRDChart = ({ compact = false }) => {
                     fontSize = "18";
                     categoryFontSize = "9";
                   } else { // Small segments
-                    textRadius = radius + 30;
+                    textRadius = radius + 22;
                     fontSize = "14";
                     categoryFontSize = "8";
                   }
@@ -187,16 +182,16 @@ const DefenseRDChart = ({ compact = false }) => {
                   return (
                     <g key={`text-${index}`} style={{ opacity: animationProgress }}>
                       {/* Value text */}
-                      <text
+                        <text
                         x={x}
                         y={y - 3}
                         textAnchor="middle"
-                        className="fill-cyan-400"
+                          className={isDark ? 'fill-white' : 'fill-gray-900'}
                         fontSize={fontSize}
                         fontWeight="700"
                         transform={`rotate(${rotation}, ${x}, ${y})`}
                       >
-                        ${item.value}B
+                        {item.value.toLocaleString()}
                       </text>
                       
                       {/* Category text for larger segments */}
@@ -205,7 +200,7 @@ const DefenseRDChart = ({ compact = false }) => {
                           x={x}
                           y={y + 12}
                           textAnchor="middle"
-                          className="fill-gray-300"
+                          className={isDark ? 'fill-white' : 'fill-gray-700'}
                           fontSize={categoryFontSize}
                           fontWeight="400"
                           transform={`rotate(${rotation}, ${x}, ${y})`}
@@ -215,25 +210,54 @@ const DefenseRDChart = ({ compact = false }) => {
                             item.category}
                         </text>
                       )}
+                      {item.angle <= 25 && (
+                        <g>
+                          <circle cx={x} cy={y + 8} r="10" fill={isDark ? '#0b1220' : '#ffffff'} stroke={item.color} strokeOpacity="0.6" />
+                          <text x={x} y={y + 12} textAnchor="middle" className={isDark ? 'fill-white' : 'fill-gray-900'} fontSize="8">
+                            {Math.round((item.value / total) * 100)}%
+                          </text>
+                        </g>
+                      )}
                     </g>
                   );
                 });
               })()}
             </svg>
+          </div>
 
-            {/* Center content overlay - use descriptive text */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center p-2" style={{ opacity: animationProgress, width: centerBox, maxWidth: centerBox }}>
-                <div className="text-cyan-300 font-semibold text-[13px] md:text-sm mb-1 leading-tight">
-                  DoD and EDF focus areas
-                </div>
-                <div className="text-gray-300 text-[11px] md:text-[13px] leading-snug break-words hyphens-auto">
-                </div>
+          {/* Right: Detailed List */}
+          <div className="w-full">
+            <div className={isDark ? "rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm p-5" : "rounded-xl border border-gray-200 bg-white p-5"}>
+              {/* Header like the reference card */}
+              <div className="mb-4">
+                <div className={isDark ? "text-xs uppercase tracking-wide text-white/70" : "text-xs uppercase tracking-wide text-gray-500"}>Continent breakdown</div>
+                <div className={isDark ? "mt-1 text-3xl font-extrabold text-white" : "mt-1 text-3xl font-extrabold text-gray-900"}>{total.toLocaleString()}</div>
+                <div className={isDark ? "text-xs text-white/60" : "text-xs text-gray-600"}>across top 10 continents</div>
+              </div>
+              <div className={isDark ? "max-h-[28rem] overflow-auto pr-1 divide-y divide-white/10" : "max-h-[28rem] overflow-auto pr-1 divide-y divide-gray-200"}>
+                {data
+                  .slice()
+                  .sort((a, b) => b.value - a.value)
+                  .map((item, idx) => {
+                    const percentage = total ? (item.value / total) * 100 : 0;
+                    return (
+                      <div key={idx} className="py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className={isDark ? "text-sm font-semibold text-white truncate" : "text-sm font-semibold text-gray-900 truncate"}>{item.category}</span>
+                          </div>
+                          <span className={isDark ? "text-sm text-white/80 whitespace-nowrap" : "text-sm text-gray-700 whitespace-nowrap"}>{Math.round(percentage)}%</span>
+                        </div>
+                        <div className={isDark ? "mt-2 h-[3px] w-full rounded-full bg-white/10 overflow-hidden" : "mt-2 h-[3px] w-full rounded-full bg-gray-200 overflow-hidden"}>
+                          <div className="h-[3px] rounded-full" style={{ width: `${percentage}%`, backgroundColor: item.color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>
-
-          {!compact && <div className="w-32"></div>}
         </div>
       </div>
     </div>

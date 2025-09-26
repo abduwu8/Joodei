@@ -1,16 +1,24 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { IconPills, IconChartBar, IconCurrencyDollar, IconTrendingUp, IconGlobe, IconPackage, IconRoute, IconBuilding } from '@tabler/icons-react';
-import FloatingDock from '../../components/FloatingDock';
+import { IconPills, IconTrendingUp, IconGlobe, IconPackage, IconRoute, IconBuilding, IconLogout } from '@tabler/icons-react';
+import { useAuth } from '../../context/AuthContext';
 import ThemeToggle from '../../components/ThemeToggle';
 import MedicinesPage from './pages/MedicinesPage.jsx';
-import RevenuePage from './pages/RevenuePage.jsx';
-import PricesPage from './pages/PricesPage.jsx';
 import medicine from '../../images/medicine.png';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { signOut, user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   const navigationItems = [
     {
@@ -18,18 +26,6 @@ const Dashboard = () => {
       href: '/dashboard/medicines',
       icon: <img src={medicine} alt="Medicines" className="w-full h-full object-contain" />,
       onClick: () => navigate('/dashboard/medicines')
-    },
-    {
-      title: 'Revenue',
-      href: '/dashboard/revenue',
-      icon: <IconChartBar />,
-      onClick: () => navigate('/dashboard/revenue')
-    },
-    {
-      title: 'Prices',
-      href: '/dashboard/prices',
-      icon: <IconCurrencyDollar />,
-      onClick: () => navigate('/dashboard/prices')
     }
   ];
 
@@ -47,7 +43,7 @@ const Dashboard = () => {
     { type: 'Price Change', description: 'Antibiotics category prices increased by 8.5%', time: '2 hours ago', impact: 'High' },
     { type: 'New Medicine', description: '15 new cardiovascular medicines registered', time: '4 hours ago', impact: 'Medium' },
     { type: 'Manufacturer Update', description: 'New manufacturer from Switzerland added', time: '6 hours ago', impact: 'Low' },
-    { type: 'Revenue Milestone', description: 'Monthly revenue target exceeded by 15%', time: '1 day ago', impact: 'High' }
+    { type: 'Update', description: 'Monthly target exceeded by 15%', time: '1 day ago', impact: 'High' }
   ];
 
   const topPerformers = [
@@ -115,20 +111,6 @@ const Dashboard = () => {
             <IconPills className="w-8 h-8 mx-auto mb-2" />
             <p className="font-medium">Analyze Medicines</p>
           </button>
-          <button 
-            onClick={() => navigate('/dashboard/revenue')}
-            className="bg-green-600 text-white p-4 rounded-lg hover:bg-green-700 transition-colors text-center"
-          >
-            <IconChartBar className="w-8 h-8 mx-auto mb-2" />
-            <p className="font-medium">View Revenue</p>
-          </button>
-          <button 
-            onClick={() => navigate('/dashboard/prices')}
-            className="bg-purple-600 text-white p-4 rounded-lg hover:bg-purple-700 transition-colors text-center"
-          >
-            <IconCurrencyDollar className="w-8 h-8 mx-auto mb-2" />
-            <p className="font-medium">Check Prices</p>
-          </button>
         </div>
       </div>
     </>
@@ -138,21 +120,32 @@ const Dashboard = () => {
     <div className="min-h-screen text-gray-900 dark:text-gray-100">
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <ThemeToggle />
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            {user && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Welcome, {user.email}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center space-x-4">
+            <ThemeToggle />
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+            >
+              <IconLogout className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
 
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard/medicines" replace />} />
           <Route path="medicines" element={<MedicinesPage />} />
-          <Route path="revenue" element={<RevenuePage />} />
-          <Route path="prices" element={<PricesPage />} />
+          {/* Removed revenue and prices routes */}
         </Routes>
-
-        <FloatingDock
-          navigationItems={navigationItems}
-          activeItem={location.pathname}
-        />
+        {/* Removed bottom navbar (FloatingDock) */}
       </div>
     </div>
   );

@@ -58,7 +58,7 @@ export function World({ globeConfig, points, arcs = [] }) {
         controls.autoRotate = globeConfig?.autoRotate ?? true;
         controls.autoRotateSpeed = globeConfig?.autoRotateSpeed ?? 0.5;
         controls.enablePan = true;
-        controls.enableZoom = true;
+        controls.enableZoom = false;
         controls.enableRotate = true;
       }
       

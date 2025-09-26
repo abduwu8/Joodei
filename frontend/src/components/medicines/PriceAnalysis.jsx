@@ -1,10 +1,16 @@
 import React from 'react';
 import Highcharts from 'highcharts';
+import Loader from '../Loader';
+import SearchBar from '../ui/SearchBar';
 
 // Price Analysis: encapsulates filters, tab switcher, table and graph views
 // UI-only component; expects a prepared medicines list and helpers from parent.
 // API: Parent owns data and passes props; this component does not fetch.
 
+// ✅ IMPLEMENTED: Medicine Price Analysis Component with Real API Integration
+// Backend API: /medicines/top-bottom endpoint from chatgpt_pie.py
+// This component displays top and bottom medicines by price with real-time filtering
+// Features: Table/Graph view toggle, authorization status and distribution area filters
 const PriceAnalysis = ({
   isDark,
   PIE_BAR_COLORS,
@@ -20,12 +26,41 @@ const PriceAnalysis = ({
   setViewMode,
   topMedicines,
   bottomMedicines,
-  getCountryFlag
+  getCountryFlag,
+  loading = false
 }) => {
+  // ✅ IMPLEMENTED: Search functionality
+  const [searchTerm, setSearchTerm] = React.useState('');
+
   // Helper to toggle values inside multi-select arrays
   const createToggleHandler = (setter) => (value) => {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   };
+
+  // ✅ IMPLEMENTED: Apply search filtering to medicines data
+  const filteredTopMedicines = React.useMemo(() => {
+    if (!searchTerm.trim()) return topMedicines;
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    return topMedicines.filter(medicine => {
+      const tradeName = (medicine.trade_name || '').toLowerCase();
+      const country = (medicine.manufacture_country || '').toLowerCase();
+      
+      return tradeName.includes(searchLower) || country.includes(searchLower);
+    });
+  }, [topMedicines, searchTerm]);
+
+  const filteredBottomMedicines = React.useMemo(() => {
+    if (!searchTerm.trim()) return bottomMedicines;
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    return bottomMedicines.filter(medicine => {
+      const tradeName = (medicine.trade_name || '').toLowerCase();
+      const country = (medicine.manufacture_country || '').toLowerCase();
+      
+      return tradeName.includes(searchLower) || country.includes(searchLower);
+    });
+  }, [bottomMedicines, searchTerm]);
 
   // Chart renderer for Highcharts graph view
   const renderChart = (containerId, data, isTop) => {
@@ -43,26 +78,27 @@ const PriceAnalysis = ({
       chart: { type: 'column', backgroundColor: 'transparent', style: { fontFamily: 'Inter, system-ui, sans-serif' } },
       title: { text: `${isTop ? 'Top 10' : 'Bottom 10'} Medicines by Price`, style: { color: isTop ? '#00d4aa' : '#ff6b35', fontSize: '18px', fontWeight: '600' } },
       subtitle: { text: isTop ? 'Highest value medicines in the market' : 'Most affordable medicines available', style: { color: '#6b7280', fontSize: '14px' } },
-      xAxis: { type: 'category', labels: { autoRotation: [-45, -90], style: { fontSize: '12px', fontFamily: 'Inter, system-ui, sans-serif', color: '#6b7280' } }, lineColor: '#e5e7eb', tickColor: '#e5e7eb' },
-      yAxis: { min: 0, title: { text: isTop ? 'Price (Millions USD)' : 'Price (USD)', style: { color: '#6b7280', fontSize: '14px' } }, labels: { style: { color: '#6b7280', fontSize: '12px' } }, gridLineColor: '#f3f4f6' },
+      xAxis: { type: 'category', labels: { rotation: -45, style: { fontSize: '11px', fontFamily: 'Inter, system-ui, sans-serif', color: '#6b7280', textAlign: 'right' } }, lineColor: '#e5e7eb', tickColor: '#e5e7eb' },
+      yAxis: { min: 0, title: { text: isTop ? 'Price (Millions SAR)' : 'Price (SAR)', style: { color: '#6b7280', fontSize: '14px' } }, labels: { style: { color: '#6b7280', fontSize: '12px' } }, gridLineColor: '#f3f4f6' },
       legend: { enabled: false },
-      tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#e5e7eb', borderRadius: 8, shadow: true, style: { fontSize: '13px' }, pointFormat: isTop ? 'Price: <b>${point.y:.1f}M</b>' : 'Price: <b>${point.y:.2f}</b>' },
-      series: [{ name: 'Price', colors, colorByPoint: true, groupPadding: 0.1, pointPadding: 0.05, data: chartData, dataLabels: { enabled: true, rotation: -90, color: '#FFFFFF', inside: true, verticalAlign: 'top', format: isTop ? '{point.y:.1f}M' : '${point.y:.2f}', y: 10, style: { fontSize: '11px', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: '600', textShadow: '0 1px 2px rgba(0,0,0,0.3)' } } }],
+      tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#e5e7eb', borderRadius: 8, shadow: true, style: { fontSize: '13px' }, pointFormat: isTop ? 'Price: <b>{point.y:.1f}M SAR</b>' : 'Price: <b>{point.y:.2f} SAR</b>' },
+      series: [{ name: 'Price', colors, colorByPoint: true, groupPadding: 0.1, pointPadding: 0.05, data: chartData, dataLabels: { enabled: true, rotation: -90, color: '#FFFFFF', inside: true, verticalAlign: 'top', format: isTop ? '{point.y:.1f}M SAR' : '{point.y:.2f} SAR', y: 10, style: { fontSize: '11px', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: '600', textShadow: '0 1px 2px rgba(0,0,0,0.3)' } } }],
       credits: { enabled: false }
     });
   };
 
+  // ✅ IMPLEMENTED: Chart rendering with loading state handling
   React.useEffect(() => {
-    if (viewMode === 'graph' && typeof Highcharts !== 'undefined') {
+    if (viewMode === 'graph' && typeof Highcharts !== 'undefined' && !loading) {
       // Ensure the DOM node exists before rendering chart
       const id = `chart-container-${activeTab}`;
       const el = document.getElementById(id);
       if (!el) return;
       setTimeout(() => {
-        renderChart(id, activeTab === 'top' ? topMedicines : bottomMedicines, activeTab === 'top');
+        renderChart(id, activeTab === 'top' ? filteredTopMedicines : filteredBottomMedicines, activeTab === 'top');
       }, 50);
     }
-  }, [viewMode, activeTab, topMedicines, bottomMedicines]);
+  }, [viewMode, activeTab, topMedicines, bottomMedicines, loading]);
 
   return (
     <div className="col-span-1 md:col-span-2 mt-[60px] pt-16 md:pt-32">
@@ -70,6 +106,17 @@ const PriceAnalysis = ({
       <div className="group relative overflow-visible p-0 text-gray-900 dark:text-white">
         <div className="flex items-center justify-between pt-8 pb-4">
           <h3 className="text-xl md:text-2xl font-semibold text-gray-900 dark:text-white">Medicine Price Analysis</h3>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <SearchBar
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search by trade name or manufacture country..."
+            isDark={isDark}
+            className="max-w-md"
+          />
         </div>
 
         {/* Filters for Price Analysis (authorization_status, distribute_area) */}
@@ -116,67 +163,78 @@ const PriceAnalysis = ({
           </div>
         </div>
 
-        {/* Content Container with Smooth Transitions */}
+        {/* ✅ IMPLEMENTED: Content Container with Loading State */}
         <div className="relative overflow-hidden">
-          {/* Table View */}
-          <div className={`transition-all duration-700 ease-in-out ${viewMode === 'table' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-8 scale-95 pointer-events-none absolute inset-0 z-10'}`}>
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100/80 dark:border-white/5">
-                      <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">#</th>
-                      <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Medicine</th>
-                      <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Origin</th>
-                      <th className="px-8 py-6 text-right text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                    {(activeTab === 'top' ? topMedicines : bottomMedicines).map((medicine, index) => (
-                      <tr key={index} className="group hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200">
-                        <td className="px-8 py-5 whitespace-nowrap"><div className="flex items-center"><span className={`text-sm font-medium ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>{index + 1}</span></div></td>
-                        <td className="px-8 py-5"><div className="text-sm font-semibold text-gray-900 dark:text-white tracking-tight">{medicine.trade_name}</div></td>
-                        <td className="px-8 py-5">
-                          {(() => {
-                            const country = medicine.manufacture_country || 'Unknown';
-                            return (
-                              <div className="flex items-center"><span className="text-lg mr-3">{getCountryFlag(country)}</span><span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{country}</span></div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="flex items-center justify-end space-x-3">
-                            <div className={`text-sm font-bold tracking-tight ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                              {medicine.public_price >= 1000000 ? `$${(medicine.public_price / 1000000).toFixed(1)}M` : `$${medicine.public_price.toFixed(2)}`}
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'top' ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-500'}`} style={{ width: `${Math.min(100, Math.max(5, (index + 1) * 10))}%` }}></div>
-                              </div>
-                              <span className={`text-xs font-semibold ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                                {activeTab === 'top' ? `+${(100 - (index + 1) * 10).toFixed(0)}%` : `-${(index + 1) * 10}%`}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {/* ✅ IMPLEMENTED: Modern Loading State with Loader Component */}
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader size={80} color={isDark ? "#20c997" : "#0891b2"} speed={1.5} />
             </div>
-          </div>
+          )}
 
-          {/* Graph View */}
-          <div className={`transition-all duration-700 ease-in-out ${viewMode === 'graph' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-0 z-20'}`}>
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm p-8">
-              <div className="space-y-6">
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-8">{activeTab === 'top' ? 'Top 10' : 'Bottom 10'} Medicines Price Distribution</h4>
-                {/* Highcharts Column Chart */}
-                <div id={`chart-container-${activeTab}`} className="w-full h-96"></div>
+          {/* Table View */}
+          {!loading && (
+            <div className={`transition-all duration-700 ease-in-out ${viewMode === 'table' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-8 scale-95 pointer-events-none absolute inset-0 z-10'}`}>
+              <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-100/80 dark:border-white/5">
+                        <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">#</th>
+                        <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Medicine</th>
+                        <th className="px-8 py-6 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Origin</th>
+                        <th className="px-8 py-6 text-right text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
+                      {(activeTab === 'top' ? filteredTopMedicines : filteredBottomMedicines).map((medicine, index) => (
+                        <tr key={index} className="group hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200">
+                          <td className="px-8 py-5 whitespace-nowrap"><div className="flex items-center"><span className={`text-sm font-medium ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>{index + 1}</span></div></td>
+                          <td className="px-8 py-5"><div className="text-sm font-semibold text-gray-900 dark:text-white tracking-tight">{medicine.trade_name}</div></td>
+                          <td className="px-8 py-5">
+                            {(() => {
+                              const country = medicine.manufacture_country || 'Unknown';
+                              return (
+                                <div className="flex items-center"><span className="text-lg mr-3">{getCountryFlag(country)}</span><span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{country}</span></div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-8 py-5 text-right">
+                            <div className="flex items-center justify-end space-x-3">
+                            <div className={`text-sm font-bold tracking-tight ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                              {medicine.public_price >= 1000000 ? `${(medicine.public_price / 1000000).toFixed(1)}M SAR` : `${medicine.public_price.toFixed(2)} SAR`}
+                            </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'top' ? 'bg-gradient-to-r from-cyan-400 to-teal-500' : 'bg-gradient-to-r from-orange-400 to-red-500'}`} style={{ width: `${Math.min(100, Math.max(5, (index + 1) * 10))}%` }}></div>
+                                </div>
+                                <span className={`text-xs font-semibold ${activeTab === 'top' ? 'text-cyan-600 dark:text-cyan-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                  {activeTab === 'top' ? `+${(100 - (index + 1) * 10).toFixed(0)}%` : `-${(index + 1) * 10}%`}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* ✅ IMPLEMENTED: Graph View with Loading State */}
+          {!loading && (
+            <div className={`transition-all duration-700 ease-in-out ${viewMode === 'graph' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95 pointer-events-none absolute inset-0 z-20'}`}>
+              <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm p-8">
+                <div className="space-y-6">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-8">{activeTab === 'top' ? 'Top 10' : 'Bottom 10'} Medicines Price Distribution</h4>
+                  {/* Highcharts Column Chart */}
+                  <div id={`chart-container-${activeTab}`} className="w-full h-96"></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}

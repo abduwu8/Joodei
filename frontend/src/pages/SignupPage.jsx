@@ -7,51 +7,59 @@ import ThemeToggle from '../components/ThemeToggle';
 import Aurora from '../components/aurora';
 import Loader from '../components/Loader';
 import LoadingScreen from '../components/LoadingScreen';
-import dashboardImage from '../images/Dashboardexample-modified.png';
+import dashboardImage from '../images/Dashboard2-modified.png';
 
-const LoginPage = () => {
+const SignupPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [agreeToTerms, setAgreeToTerms] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [showLoadingScreen, setShowLoadingScreen] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
     const { theme } = useTheme();
-    const { signIn, signInWithGoogle } = useAuth();
+    const { signUp, signInWithGoogle } = useAuth();
     const isDark = theme === 'dark';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
+
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters long');
+            return;
+        }
+
+        if (!agreeToTerms) {
+            setError('Please agree to the terms and conditions');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
-            const { data, error } = await signIn(email, password);
+            const { data, error } = await signUp(email, password);
             
             if (error) {
-                // More user-friendly error messages
-                let errorMessage = error.message;
-                if (error.message.includes('Invalid login credentials')) {
-                    errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-                } else if (error.message.includes('User not found')) {
-                    errorMessage = 'No account found with this email address. Please sign up or check your email.';
-                } else if (error.message.includes('Too many requests')) {
-                    errorMessage = 'Too many failed attempts. Please wait a moment before trying again.';
-                } else if (error.message.includes('Email not confirmed')) {
-                    errorMessage = 'Please verify your email address before signing in.';
-                }
-                setError(errorMessage);
+                setError(error.message);
                 setIsLoading(false);
             } else {
-                setShowLoadingScreen(true);
+                setSuccess('Account created successfully! Please check your email to verify your account.');
+                setIsLoading(false);
                 setTimeout(() => {
-                    navigate('/dashboard');
-                }, 2000);
+                    navigate('/login');
+                }, 3000);
             }
         } catch (err) {
-            setError('Unable to connect to the server. Please check your internet connection and try again.');
+            setError('An unexpected error occurred');
             setIsLoading(false);
         }
     };
@@ -61,20 +69,13 @@ const LoginPage = () => {
         try {
             const { data, error } = await signInWithGoogle();
             if (error) {
-                let errorMessage = error.message;
-                if (error.message.includes('popup_closed_by_user')) {
-                    errorMessage = 'Sign-in was cancelled. Please try again if you want to continue.';
-                } else if (error.message.includes('access_denied')) {
-                    errorMessage = 'Google sign-in was denied. Please try again or use email/password.';
-                }
-                setError(errorMessage);
+                setError(error.message);
             }
         } catch (err) {
-            setError('Unable to connect to Google. Please check your internet connection and try again.');
+            setError('An unexpected error occurred');
         }
     };
 
-    // Show loading screen if user has signed in
     if (showLoadingScreen) {
         return <LoadingScreen />;
     }
@@ -87,7 +88,6 @@ const LoginPage = () => {
             transition={{ duration: 0.3 }}
             className={`h-screen overflow-hidden relative ${isDark ? 'bg-[#020617]' : 'bg-white'}`}
         >
-            {/* Aurora Background for Dark Mode */}
             {isDark && (
                 <div className="absolute inset-0 z-0">
                     <Aurora 
@@ -98,7 +98,6 @@ const LoginPage = () => {
                 </div>
             )}
             
-            {/* Grid Background for Light Mode */}
             {!isDark && (
                 <div
                     className="absolute inset-0 z-0"
@@ -116,7 +115,6 @@ const LoginPage = () => {
                 />
             )}
             
-            {/* Fade overlay across entire width */}
             <div className="absolute inset-0 z-5">
                 <div className={`w-full h-full ${isDark ? 'bg-gradient-to-r from-[#020617] via-[#020617]/80 via-[#020617]/40 via-[#020617]/10 to-transparent' : 'bg-gradient-to-r from-white via-white/80 via-white/40 via-white/10 to-transparent'}`}></div>
             </div>
@@ -125,8 +123,8 @@ const LoginPage = () => {
             <div className="absolute top-4 right-4 z-20">
                 <ThemeToggle />
             </div>
-
-            {/* Login Form - Full width on mobile, half width on desktop */}
+            
+            {/* Signup Form - Full width on mobile, half width on desktop */}
             <motion.div 
                 initial={{ x: -50, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
@@ -140,65 +138,35 @@ const LoginPage = () => {
                     transition={{ duration: 0.6, delay: 0.2 }}
                     className="w-full max-w-md space-y-6"
                 >
-                    {/* Logo and Header */}
                     <div className="text-center">
-                        
                         <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            Login
+                            Create Account
                         </h1>
                         <p className={`mt-2 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            Welcome back! Please enter your details.
+                            Join us today! Create your account to get started.
                         </p>
                     </div>
 
-                    {/* Error Message */}
                     {error && (
-                        <div className={`relative p-4 rounded-xl border-l-4 shadow-sm animate-in slide-in-from-top-2 duration-300 ${
+                        <div className={`p-3 rounded-lg border ${
                             isDark 
-                                ? 'bg-red-900/10 border-l-red-500 border border-red-500/20 text-red-300' 
-                                : 'bg-red-50 border-l-red-500 border border-red-200 text-red-700'
+                                ? 'bg-red-900/20 border-red-500 text-red-400' 
+                                : 'bg-red-50 border-red-200 text-red-600'
                         }`}>
-                            <div className="flex items-start space-x-3">
-                                {/* Professional Error Icon */}
-                                <div className={`flex-shrink-0 w-5 h-5 mt-0.5 ${
-                                    isDark ? 'text-red-400' : 'text-red-500'
-                                }`}>
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                
-                                <div className="flex-1 min-w-0">
-                                    <h3 className={`text-sm font-semibold ${
-                                        isDark ? 'text-red-200' : 'text-red-800'
-                                    }`}>
-                                        Authentication Failed
-                                    </h3>
-                                    <p className={`mt-1 text-sm ${
-                                        isDark ? 'text-red-300' : 'text-red-600'
-                                    }`}>
-                                        {error}
-                                    </p>
-                                </div>
-                                
-                                {/* Close Button */}
-                                <button
-                                    onClick={() => setError('')}
-                                    className={`flex-shrink-0 w-5 h-5 rounded-full p-0.5 transition-colors ${
-                                        isDark 
-                                            ? 'text-red-400 hover:text-red-300 hover:bg-red-800/20' 
-                                            : 'text-red-500 hover:text-red-600 hover:bg-red-100'
-                                    }`}
-                                >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-                            </div>
+                            {error}
                         </div>
                     )}
 
-                    {/* Login Form */}
+                    {success && (
+                        <div className={`p-3 rounded-lg border ${
+                            isDark 
+                                ? 'bg-green-900/20 border-green-500 text-green-400' 
+                                : 'bg-green-50 border-green-200 text-green-600'
+                        }`}>
+                            {success}
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label htmlFor="email" className={`block text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-gray-700'}`}>
@@ -223,63 +191,57 @@ const LoginPage = () => {
                             <label htmlFor="password" className={`block text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-gray-700'}`}>
                                 Password
                             </label>
-                            <div className="relative">
-                                <input
-                                    id="password"
-                                    type={showPassword ? "text" : "password"}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    required
-                                    className={`w-full px-4 py-3 pr-12 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                                        isDark 
-                                            ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400' 
-                                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                                    }`}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-md transition-colors ${
-                                        isDark 
-                                            ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                    }`}
-                                >
-                                    {showPassword ? (
-                                        // Eye with slash icon (hide password)
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                                        </svg>
-                                    ) : (
-                                        // Eye icon (show password)
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
-                                    )}
-                                </button>
-                            </div>
+                            <input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                className={`w-full px-4 py-3 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                                    isDark 
+                                        ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400' 
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                                }`}
+                            />
                         </div>
 
-                        <div className="flex items-center justify-between">
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                    className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                                />
-                                <span className={`ml-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                                    Remember for 30 days
-                                </span>
+                        <div>
+                            <label htmlFor="confirmPassword" className={`block text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-gray-700'}`}>
+                                Confirm Password
                             </label>
-                            <button
-                                type="button"
-                                className={`text-sm font-medium hover:underline ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
-                            >
-                                Forgot password
-                            </button>
+                            <input
+                                id="confirmPassword"
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                className={`w-full px-4 py-3 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                                    isDark 
+                                        ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400' 
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                                }`}
+                            />
+                        </div>
+
+                        <div className="flex items-center">
+                            <input
+                                type="checkbox"
+                                id="agreeToTerms"
+                                checked={agreeToTerms}
+                                onChange={(e) => setAgreeToTerms(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+                            />
+                            <label htmlFor="agreeToTerms" className={`ml-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                I agree to the{' '}
+                                <button
+                                    type="button"
+                                    className={`font-medium hover:underline ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
+                                >
+                                    Terms and Conditions
+                                </button>
+                            </label>
                         </div>
 
                         <button
@@ -296,7 +258,7 @@ const LoginPage = () => {
                                     <Loader size={20} color="white" speed={1.5} />
                                 </div>
                             ) : (
-                                'Sign in'
+                                'Create Account'
                             )}
                         </button>
 
@@ -315,17 +277,17 @@ const LoginPage = () => {
                                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                             </svg>
-                            Sign in with Google
+                            Sign up with Google
                         </button>
 
                         <p className={`text-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            Don't have an account?{' '}
+                            Already have an account?{' '}
                             <button
                                 type="button"
-                                onClick={() => navigate('/signup')}
+                                onClick={() => navigate('/login')}
                                 className={`font-medium hover:underline ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
                             >
-                                Sign up
+                                Sign in
                             </button>
                         </p>
                     </form>
@@ -340,8 +302,6 @@ const LoginPage = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="absolute right-0 top-0 w-1/2 h-full hidden lg:flex items-center justify-center z-10"
             >
-                
-                {/* Dashboard Preview - Centered application window */}
                 <div className="absolute top-[70%] right-[-120%] transform -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[700px] z-10">
                     <div className={`w-full h-full rounded-[5rem] shadow-2xl ${isDark ? 'bg-gray-800 border-2 border-gray-700' : 'bg-white border-2 border-gray-200'} overflow-hidden p-4`}>
                         <div className={`w-full h-full rounded-[4rem] ${isDark ? 'border border-gray-600' : 'border border-gray-300'} overflow-hidden`}>
@@ -358,4 +318,4 @@ const LoginPage = () => {
     );
 };
 
-export default LoginPage;
+export default SignupPage;

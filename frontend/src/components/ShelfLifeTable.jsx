@@ -3,60 +3,96 @@ import { IconChevronDown } from '@tabler/icons-react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import 'highcharts/modules/treemap';
+import Loader from './Loader';
+import SearchBar from './ui/SearchBar';
+
+// ✅ IMPLEMENTED: Shelf Life Analysis with Real API Integration
+// Backend API: /analysis/shelf_life endpoint provides real shelf life data
+// Features: Filters, Pagination, Loading states, Heatmap, Bar chart visualization
 
 const ShelfLifeTable = ({ isDark }) => {
-  // Data source: replace demo data with API results when backend is ready
-  // API auth key: attach header like { Authorization: `Bearer ${import.meta.env.VITE_API_KEY}` } in fetch
-  // Manufacturer data for bar chart
-  const manufacturers = [
-    'TABUK PHARMACEUTICAL', 'SPIMACO', 'Gulf Pharmaceutical Ind', 'Pharmaceutical Solution', 
-    'Jamjoom Pharmaceutical', 'Jazeera Pharmaceutical I', 'RIYADH PHARMA', 'Avalon Pharma', 
-    'DAR ALDAWA', 'UNITED PHARMACEUTICAL', 'SAJA-SAUDI ARABIAN J', 'NATIONAL PHARMACEUTICAL', 
-    'QATAR PHARMA', 'KUWAIT SAUDI PHARM', 'Pharma International Co.', 'DEEF PHARMACEUTICAL', 
-    'PFIZER', 'OMAN PHARMACEUTICAL', 'Hetero Labs Limited', 'The Jordanian Pharmaceutical', 
-    'Hikma Farmaceutica', 'Jordan Sweden Medical', 'NOVARTIS', 'ROCHE', 'MERCK', 
-    'GLAXOSMITHKLINE', 'SANOFI', 'ASTRAZENECA', 'JOHNSON & JOHNSON', 'BRISTOL MYERS SQUIBB'
+  // ✅ IMPLEMENTED: API data state management
+  const [shelfLifeTableData, setShelfLifeTableData] = useState([]);
+  const [topManufacturingCountries, setTopManufacturingCountries] = useState([]);
+  const [topManufacturers, setTopManufacturers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Fallback mock data
+  const mockShelfLifeData = [
+    { registernumber: '101244649', trade_name: 'United States Medicine 1', shelflife: '24' },
+    { registernumber: '101244650', trade_name: 'United States Medicine 2', shelflife: '36' },
+    { registernumber: '101256513', trade_name: 'Germany Medicine 1', shelflife: '12' },
+    { registernumber: '102210483', trade_name: 'Italy Medicine 1', shelflife: '48' },
+    { registernumber: '102210484', trade_name: 'France Medicine 1', shelflife: '18' }
   ];
 
-  // Helper function to create medicine data with manufacturer
-  const createMedicineData = (length, startReg, countryName, countryIndex) => {
-    return Array.from({ length }, (_, i) => ({
-      registernumber: `${startReg + i}`,
-      trade_name: `${countryName} Medicine ${i + 1}`,
-      shelflife: 24 + (i % 12),
-      drugtype: ['Biological', 'Generic', 'NCE', 'Radiopharmaceutical'][i % 4],
-      legal_status: ['Prescription', 'OTC'][i % 2],
-      country: countryName,
-      manufacturer: manufacturers[(i + countryIndex) % manufacturers.length]
-    }));
-  };
-
-  // UI: sample data (15 items). Swap with API response payload
-  const shelfLifeData = [
-    // United States - 5 items
-    ...createMedicineData(5, 101244649, 'United States', 0),
-    
-    // Germany - 4 items
-    ...createMedicineData(4, 101256513, 'Germany', 1),
-    
-    // Italy - 3 items
-    ...createMedicineData(3, 102210483, 'Italy', 2),
-    
-    // France - 2 items
-    ...createMedicineData(2, 102210484, 'France', 3),
-    
-    // India - 1 item
-    ...createMedicineData(1, 102210485, 'India', 4)
-  ];
+  // ✅ IMPLEMENTED: Use API data with fallback to mock data
+  const shelfLifeData = shelfLifeTableData.length > 0 ? shelfLifeTableData : mockShelfLifeData;
 
   // UI: table filters (drugtype, legal_status)
   const [selectedDrugtypes, setSelectedDrugtypes] = useState([]);
   const [selectedLegalStatuses, setSelectedLegalStatuses] = useState([]);
   const [viewMode, setViewMode] = useState('table'); // 'table', 'heatmap', or 'barchart'
   
+  // ✅ IMPLEMENTED: Search functionality
+  const [searchTerm, setSearchTerm] = useState('');
+  
   // UI: pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // ✅ IMPLEMENTED: Fetch shelf life data from /analysis/shelf_life API
+  const fetchShelfLifeData = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      
+      // Add filter parameters if selected
+      if (selectedDrugtypes.length > 0) {
+        selectedDrugtypes.forEach(drugtype => params.append('drugtype', drugtype));
+      }
+      if (selectedLegalStatuses.length > 0) {
+        selectedLegalStatuses.forEach(legalStatus => params.append('legal_status', legalStatus));
+      }
+      
+      params.append('limit', '500');
+
+      const url = `http://localhost:8000/analysis/shelf_life?${params.toString()}`;
+      console.log('🔍 Fetching shelf life data with filters:', {
+        selectedDrugtypes,
+        selectedLegalStatuses,
+        url
+      });
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error('❌ API request failed:', res.status, res.statusText);
+        return;
+      }
+      const payload = await res.json();
+      
+      console.log('✅ API response received:', {
+        totalRows: payload.data?.rows?.length || 0,
+        manufacturingCountries: payload.data?.top_5_manufacturing_countries?.length || 0,
+        manufacturers: payload.data?.top_20_manufacturers?.length || 0
+      });
+      
+      if (payload.data) {
+        setShelfLifeTableData(payload.data.rows || []);
+        setTopManufacturingCountries(payload.data.top_5_manufacturing_countries || []);
+        setTopManufacturers(payload.data.top_20_manufacturers || []);
+      }
+    } catch (e) {
+      console.error('❌ Error fetching shelf life data:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ IMPLEMENTED: Fetch data on component mount and when filters change
+  useEffect(() => {
+    fetchShelfLifeData();
+  }, [selectedDrugtypes, selectedLegalStatuses]);
 
   // UI: filter options (static). Consider deriving from API metadata
   const drugtypes = ['Biological', 'Generic', 'NCE', 'Radiopharmaceutical'];
@@ -65,52 +101,60 @@ const ShelfLifeTable = ({ isDark }) => {
   // Color mapping for different drug types - vibrant colors like the country treemap
   const getColorForDrugType = (drugtype) => {
     const colors = {
-      'Biological': '#4A90E2',      // Bright blue
-      'Generic': '#2E8B57',         // Dark blue  
-      'NCE': '#FF6B35',             // Orange
-      'Radiopharmaceutical': '#8B4B8C' // Dark purple
+      'Biological': '#FBBF24',      // Bright sunny yellow
+      'Generic': '#35B48F',         // Vibrant teal/seafoam green
+      'NCE': '#1883AA',             // Medium bright blue
+      'Radiopharmaceutical': '#1E40AF' // Deep rich navy blue
     };
-    return colors[drugtype] || '#A9B4C2';
+    return colors[drugtype] || '#89AB56';
   };
 
   // Color mapping for countries - vibrant colors like the country treemap
   const getColorForCountry = (country) => {
     const colors = {
-      'United States': '#4A90E2',      // Bright blue
-      'Germany': '#2E8B57',            // Dark blue
-      'Italy': '#FF6B35',              // Orange
-      'France': '#8B4B8C',             // Dark purple
-      'India': '#FF69B4',              // Pink
-      'United Kingdom': '#9370DB',     // Light purple
-      'Spain': '#FFD700',              // Gold/yellow
-      'Ireland': '#FF0000',            // Red
-      'Switzerland': '#20B2AA',        // Teal
-      'Saudi Arabia': '#32CD32',       // Green
-      'Canada': '#00CED1',             // Cyan
-      'Belgium': '#87CEEB',            // Light blue
-      'China': '#FFD700',              // Gold/yellow
-      'Greece': '#FFB6C1',             // Light pink
-      'Portugal': '#20B2AA',           // Teal
-      'Netherlands': '#87CEEB',        // Light blue
-      'Jordan': '#FFA500',             // Orange
-      'Sweden': '#4169E1',             // Medium blue
-      'Poland': '#191970',             // Darker blue
-      'Turkey': '#CD853F',             // Orange-red
-      'Japan': '#DDA0DD',              // Lavender
-      'Denmark': '#000080',            // Very dark blue
-      'Unknown': '#A9B4C2'             // Default gray
+      'United States': '#FBBF24',      // Bright sunny yellow
+      'Germany': '#35B48F',            // Vibrant teal/seafoam green
+      'Italy': '#1883AA',              // Medium bright blue
+      'France': '#1E40AF',             // Deep rich navy blue
+      'India': '#89AB56',              // Light muted olive green
+      'United Kingdom': '#F9B31B',     // Deeper golden yellow
+      'Spain': '#16A4A8',              // Darker blue-leaning teal
+      'Ireland': '#1B61AD',            // Darker royal blue
+      'Switzerland': '#F7A711',        // Orange-yellow
+      'Saudi Arabia': '#DCA11C',       // Muted earthy gold
+      'Canada': '#FBBF24',             // Bright sunny yellow
+      'Belgium': '#35B48F',            // Vibrant teal/seafoam green
+      'China': '#1883AA',              // Medium bright blue
+      'Greece': '#1E40AF',             // Deep rich navy blue
+      'Portugal': '#89AB56',           // Light muted olive green
+      'Netherlands': '#F9B31B',        // Deeper golden yellow
+      'Jordan': '#16A4A8',             // Darker blue-leaning teal
+      'Sweden': '#1B61AD',             // Darker royal blue
+      'Poland': '#F7A711',             // Orange-yellow
+      'Turkey': '#DCA11C',             // Muted earthy gold
+      'Japan': '#FBBF24',              // Bright sunny yellow
+      'Denmark': '#35B48F',            // Vibrant teal/seafoam green
+      'Unknown': '#89AB56'             // Light muted olive green
     };
-    return colors[country] || '#A9B4C2';
+    return colors[country] || '#89AB56';
   };
 
-  // UI: apply filters to dataset
+  // ✅ IMPLEMENTED: Use API data with search filtering
+  // Backend handles filter parameters, frontend handles search
   const filteredData = useMemo(() => {
+    if (!searchTerm.trim()) return shelfLifeData;
+    
+    const searchLower = searchTerm.toLowerCase().trim();
     return shelfLifeData.filter(item => {
-      const drugtypeMatch = selectedDrugtypes.length === 0 || selectedDrugtypes.includes(item.drugtype);
-      const legalStatusMatch = selectedLegalStatuses.length === 0 || selectedLegalStatuses.includes(item.legal_status);
-      return drugtypeMatch && legalStatusMatch;
+      const tradeName = (item.trade_name || '').toLowerCase();
+      const registernumber = (item.registernumber || '').toLowerCase();
+      const shelflife = (item.shelflife || '').toString().toLowerCase();
+      
+      return tradeName.includes(searchLower) || 
+             registernumber.includes(searchLower) || 
+             shelflife.includes(searchLower);
     });
-  }, [selectedDrugtypes, selectedLegalStatuses]);
+  }, [shelfLifeData, searchTerm]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -118,25 +162,31 @@ const ShelfLifeTable = ({ isDark }) => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
-  // Reset to first page when filters change
+  // Reset to first page when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedDrugtypes, selectedLegalStatuses]);
+  }, [selectedDrugtypes, selectedLegalStatuses, searchTerm]);
 
   const handleDrugtypeChange = (drugtype) => {
-    setSelectedDrugtypes(prev => 
-      prev.includes(drugtype) 
+    console.log('🔧 Drugtype filter changed:', drugtype);
+    setSelectedDrugtypes(prev => {
+      const newSelection = prev.includes(drugtype) 
         ? prev.filter(item => item !== drugtype)
-        : [...prev, drugtype]
-    );
+        : [...prev, drugtype];
+      console.log('🔧 New drugtype selection:', newSelection);
+      return newSelection;
+    });
   };
 
   const handleLegalStatusChange = (legalStatus) => {
-    setSelectedLegalStatuses(prev => 
-      prev.includes(legalStatus) 
+    console.log('🔧 Legal status filter changed:', legalStatus);
+    setSelectedLegalStatuses(prev => {
+      const newSelection = prev.includes(legalStatus) 
         ? prev.filter(item => item !== legalStatus)
-        : [...prev, legalStatus]
-    );
+        : [...prev, legalStatus];
+      console.log('🔧 New legal status selection:', newSelection);
+      return newSelection;
+    });
   };
 
   // Pagination functions
@@ -156,9 +206,20 @@ const ShelfLifeTable = ({ isDark }) => {
     }
   };
 
-  // UI: transform for heatmap (treemap) by country
+  // ✅ IMPLEMENTED: Transform for heatmap (treemap) by manufacturing country using API data
   const heatmapData = useMemo(() => {
-    // Group by country
+    // Use API manufacturing countries data if available, otherwise fallback to table data
+    if (topManufacturingCountries.length > 0) {
+      return topManufacturingCountries.map((item, index) => ({
+        id: `country-${index}`,
+        name: item.manufacture_country || 'Unknown',
+        value: item.count_registernumber || 0,
+        shelflife: 0, // API doesn't provide shelf life for countries
+        color: getColorForCountry(item.manufacture_country)
+      }));
+    }
+
+    // Fallback: Group by country from table data
     const grouped = filteredData.reduce((acc, item) => {
       const country = item.country || 'Unknown';
       if (!acc[country]) {
@@ -169,7 +230,7 @@ const ShelfLifeTable = ({ isDark }) => {
         };
       }
       acc[country].count += 1;
-      acc[country].totalShelfLife += item.shelflife;
+      acc[country].totalShelfLife += parseInt(item.shelflife) || 0;
       return acc;
     }, {});
 
@@ -183,11 +244,23 @@ const ShelfLifeTable = ({ isDark }) => {
     }));
 
     return data;
-  }, [filteredData]);
+  }, [topManufacturingCountries, filteredData]);
 
-  // UI: transform for bar chart (top manufacturers)
+  // ✅ IMPLEMENTED: Transform for bar chart (top manufacturers) using API data
   const barChartData = useMemo(() => {
-    // Group by manufacturer
+    // Use API manufacturers data if available, otherwise fallback to table data
+    if (topManufacturers.length > 0) {
+      return topManufacturers.map((item, index) => ({
+        name: item.manufacture_name || 'Unknown',
+        y: item.count_registernumber || 0,
+        color: '#4A90E2', // Blue color like in the image
+        // ✅ IMPLEMENTED: Add additional data for enhanced tooltips
+        countriesCount: item.manufacture_countries_count || 0,
+        countries: item.manufacture_countries || []
+      }));
+    }
+
+    // Fallback: Group by manufacturer from table data
     const grouped = filteredData.reduce((acc, item) => {
       const manufacturer = item.manufacturer || 'Unknown';
       if (!acc[manufacturer]) {
@@ -211,7 +284,7 @@ const ShelfLifeTable = ({ isDark }) => {
       }));
 
     return data;
-  }, [filteredData]);
+  }, [topManufacturers, filteredData]);
 
   // UI: Highcharts treemap options
   const heatmapOptions = useMemo(() => ({
@@ -277,7 +350,7 @@ const ShelfLifeTable = ({ isDark }) => {
       style: {
         color: isDark ? '#e5e7eb' : '#111827'
       },
-      pointFormat: '<b>{point.name}</b><br/>Number of medicines: <b>{point.value}</b><br/>Avg Shelf Life: <b>{point.shelflife ? point.shelflife.toFixed(1) : "N/A"} months</b>'
+      pointFormat: '<b>{point.name}</b><br/>Number of medicines: <b>{point.value}</b>'
     },
     credits: { enabled: false }
   }), [isDark, heatmapData, viewMode]);
@@ -342,13 +415,33 @@ const ShelfLifeTable = ({ isDark }) => {
       style: {
         color: isDark ? '#e5e7eb' : '#111827'
       },
-      pointFormat: '<b>{point.name}</b><br/>Count: <b>{point.y}</b>'
+      // ✅ IMPLEMENTED: Enhanced tooltip with manufacturer countries information
+      pointFormatter: function() {
+        const countriesInfo = this.countriesCount ? 
+          `<br/>Manufacturing Countries: <b>${this.countriesCount}</b>` : '';
+        const countriesList = this.countries && this.countries.length > 0 ? 
+          `<br/>Countries: <b>${this.countries.slice(0, 3).join(', ')}${this.countries.length > 3 ? '...' : ''}</b>` : '';
+        return `<b>${this.name}</b><br/>Count: <b>${this.y}</b>${countriesInfo}${countriesList}`;
+      }
     },
     credits: { enabled: false }
   }), [isDark, barChartData, viewMode]);
 
   return (
     <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-100/50 dark:border-white/5 overflow-hidden shadow-sm">
+      {/* Search Bar */}
+      <div className="px-6 py-4 border-b border-gray-100/80 dark:border-white/5">
+        <div className="mb-4">
+          <SearchBar
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search by trade name, register number, or shelf life..."
+            isDark={isDark}
+            className="max-w-md"
+          />
+        </div>
+      </div>
+
       {/* Filters and View Toggle */}
       <div className="px-6 py-4 border-b border-gray-100/80 dark:border-white/5">
         <div className="flex flex-wrap gap-6 mb-4">
@@ -435,145 +528,168 @@ const ShelfLifeTable = ({ isDark }) => {
       {/* Content Area */}
       {viewMode === 'table' ? (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-blue-200 dark:border-blue-800">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                    Register Number
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                    Trade Name
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                    Shelf Life
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
-                {paginatedData.map((row, index) => (
-                  <tr 
-                    key={row.registernumber} 
-                    className={`hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200 ${
-                      index % 2 === 0 
-                        ? 'bg-white dark:bg-gray-900/20' 
-                        : 'bg-gray-50/50 dark:bg-gray-800/30'
-                    }`}
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                      {row.registernumber}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                      {row.trade_name}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        {row.shelflife} months
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-gray-100/80 dark:border-white/5 bg-gray-50/50 dark:bg-gray-800/30">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} results
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  {/* Previous Button */}
-                  <button
-                    onClick={handlePreviousPage}
-                    disabled={currentPage === 1}
-                    className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                      currentPage === 1
-                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    Previous
-                  </button>
-
-                  {/* Page Numbers */}
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                      // Show first page, last page, current page, and pages around current page
-                      const shouldShow = 
-                        page === 1 || 
-                        page === totalPages || 
-                        (page >= currentPage - 1 && page <= currentPage + 1);
-                      
-                      if (!shouldShow) {
-                        // Show ellipsis for gaps
-                        if (page === currentPage - 2 || page === currentPage + 2) {
-                          return (
-                            <span key={page} className="px-2 py-1 text-gray-400 dark:text-gray-600">
-                              ...
-                            </span>
-                          );
-                        }
-                        return null;
-                      }
-
-                      return (
-                        <button
-                          key={page}
-                          onClick={() => handlePageChange(page)}
-                          className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                            currentPage === page
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Next Button */}
-                  <button
-                    onClick={handleNextPage}
-                    disabled={currentPage === totalPages}
-                    className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
-                      currentPage === totalPages
-                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+          {/* ✅ IMPLEMENTED: Loading State with Loader Component */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader size={80} color={isDark ? "#20c997" : "#0891b2"} speed={1.5} />
             </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-blue-200 dark:border-blue-800">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                        Register Number
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                        Trade Name
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                        Shelf Life
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50/50 dark:divide-white/5">
+                    {paginatedData.map((row, index) => (
+                      <tr 
+                        key={row.registernumber} 
+                        className={`hover:bg-white/40 dark:hover:bg-gray-800/40 transition-all duration-200 ${
+                          index % 2 === 0 
+                            ? 'bg-white dark:bg-gray-900/20' 
+                            : 'bg-gray-50/50 dark:bg-gray-800/30'
+                        }`}
+                      >
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                          {row.registernumber}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                          {row.trade_name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {row.shelflife} months
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-100/80 dark:border-white/5 bg-gray-50/50 dark:bg-gray-800/30">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} results
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {/* Previous Button */}
+                      <button
+                        onClick={handlePreviousPage}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                          currentPage === 1
+                            ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Previous
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          // Show first page, last page, current page, and pages around current page
+                          const shouldShow = 
+                            page === 1 || 
+                            page === totalPages || 
+                            (page >= currentPage - 1 && page <= currentPage + 1);
+                          
+                          if (!shouldShow) {
+                            // Show ellipsis for gaps
+                            if (page === currentPage - 2 || page === currentPage + 2) {
+                              return (
+                                <span key={page} className="px-2 py-1 text-gray-400 dark:text-gray-600">
+                                  ...
+                                </span>
+                              );
+                            }
+                            return null;
+                          }
+
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => handlePageChange(page)}
+                              className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                                currentPage === page
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        onClick={handleNextPage}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                          currentPage === totalPages
+                            ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </>
+          </>
       ) : viewMode === 'heatmap' ? (
         <div className="p-4">
-          <div style={{ width: '100%', height: 500 }}>
-            <HighchartsReact
-              key={`heatmap-${viewMode}`}
-              highcharts={Highcharts}
-              options={heatmapOptions}
-              containerProps={{ style: { width: '100%', height: '100%' } }}
-            />
-          </div>
+          {/* ✅ IMPLEMENTED: Loading State for Heatmap */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader size={80} color={isDark ? "#20c997" : "#0891b2"} speed={1.5} />
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: 500 }}>
+              <HighchartsReact
+                key={`heatmap-${viewMode}`}
+                highcharts={Highcharts}
+                options={heatmapOptions}
+                containerProps={{ style: { width: '100%', height: '100%' } }}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="p-4">
-          <div style={{ width: '100%', height: 500 }}>
-            <HighchartsReact
-              key={`barchart-${viewMode}`}
-              highcharts={Highcharts}
-              options={barChartOptions}
-              containerProps={{ style: { width: '100%', height: '100%' } }}
-            />
-          </div>
+          {/* ✅ IMPLEMENTED: Loading State for Bar Chart */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader size={80} color={isDark ? "#20c997" : "#0891b2"} speed={1.5} />
+            </div>
+          ) : (
+            <div style={{ width: '100%', height: 500 }}>
+              <HighchartsReact
+                key={`barchart-${viewMode}`}
+                highcharts={Highcharts}
+                options={barChartOptions}
+                containerProps={{ style: { width: '100%', height: '100%' } }}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
